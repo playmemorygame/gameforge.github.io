@@ -1,12 +1,958 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Video To Game Analyzer</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no,maximum-scale=1.0">
+<title>CUBE RUSH</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0a1a;font-family:'Rajdhani',sans-serif;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none}
+#gameContainer{width:100%;height:100%;position:relative}
+canvas{display:block}
+
+#hud{position:absolute;top:0;left:0;width:100%;pointer-events:none;z-index:10;padding:12px 16px;}
+#topRow{display:flex;justify-content:space-between;align-items:flex-start;}
+#scoreBox{text-align:center;}
+#scoreLabel{color:rgba(255,255,255,0.5);font-size:11px;letter-spacing:3px;text-transform:uppercase;}
+#scoreDisplay{color:#fff;font-size:52px;font-family:'Bebas Neue',sans-serif;line-height:1;text-shadow:0 0 30px rgba(0,220,255,0.8),0 0 60px rgba(0,220,255,0.4);}
+#bestBox{text-align:right;}
+#bestLabel{color:rgba(255,255,255,0.5);font-size:11px;letter-spacing:3px;}
+#bestDisplay{color:#ffd700;font-size:24px;font-family:'Bebas Neue',sans-serif;text-shadow:0 0 20px rgba(255,215,0,0.6);}
+#collectibleBox{text-align:left;}
+#collectibleDisplay{color:#ffd700;font-size:16px;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;line-height:1.3;}
+
+#comboDisplay{position:absolute;top:105px;left:50%;transform:translateX(-50%);color:#ff6bff;font-size:28px;font-family:'Bebas Neue',sans-serif;letter-spacing:2px;pointer-events:none;z-index:10;opacity:0;transition:opacity 0.3s;text-shadow:0 0 20px rgba(255,107,255,0.8);}
+#multiplierDisplay{position:absolute;top:140px;left:50%;transform:translateX(-50%);color:#00ffaa;font-size:18px;font-family:'Bebas Neue',sans-serif;pointer-events:none;z-index:10;opacity:0;transition:opacity 0.3s;}
+#speedDisplay{position:absolute;top:170px;left:50%;transform:translateX(-50%);color:#ff9500;font-size:14px;font-family:'Bebas Neue',sans-serif;letter-spacing:2px;pointer-events:none;z-index:10;opacity:0.7;}
+
+#speedBarWrap{position:absolute;bottom:0;left:0;width:100%;height:5px;background:rgba(255,255,255,0.08);pointer-events:none;z-index:10;}
+#speedBar{height:100%;width:0%;background:linear-gradient(90deg,#00ffaa,#00ccff,#ff6bff,#ff4444);transition:width 0.3s;border-radius:0 3px 3px 0;}
+
+#powerupDisplay{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);font-size:36px;font-family:'Bebas Neue',sans-serif;letter-spacing:3px;pointer-events:none;z-index:10;opacity:0;}
+
+#laneGuide{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);display:flex;gap:14px;pointer-events:none;z-index:10;}
+.laneDot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.2);transition:background 0.15s, transform 0.15s;}
+.laneDot.active{background:#00ccff;transform:scale(1.6);box-shadow:0 0 10px #00ccff;}
+
+#startScreen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:30;background:linear-gradient(180deg,rgba(10,10,26,0.95) 0%,rgba(10,10,26,0.7) 100%);}
+#startScreen h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(56px,12vw,100px);color:#fff;letter-spacing:6px;text-shadow:0 0 40px rgba(0,220,255,1),0 0 80px rgba(0,220,255,0.5);margin-bottom:4px;}
+#startScreen .subtitle{color:rgba(255,255,255,0.5);font-size:14px;letter-spacing:6px;margin-bottom:40px;}
+#startScreen .tip{color:rgba(255,255,255,0.3);font-size:12px;letter-spacing:2px;margin-top:8px;line-height:1.6;}
+.startBtn{background:linear-gradient(135deg,#00ccff,#ff6bff);border:none;color:#fff;padding:14px 48px;border-radius:50px;font-size:20px;font-family:'Bebas Neue',sans-serif;letter-spacing:3px;cursor:pointer;pointer-events:all;box-shadow:0 0 30px rgba(0,204,255,0.5);transition:transform 0.1s, box-shadow 0.1s;}
+.startBtn:active{transform:scale(0.96);box-shadow:0 0 10px rgba(0,204,255,0.3);}
+.highScoreRow{color:rgba(255,255,255,0.4);font-size:14px;letter-spacing:2px;margin-bottom:24px;}
+.highScoreRow span{color:#ffd700;font-family:'Bebas Neue',sans-serif;font-size:20px;}
+
+#gameOverPanel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:linear-gradient(160deg,rgba(0,10,30,0.97),rgba(20,0,40,0.97));border:1px solid rgba(255,255,255,0.1);border-radius:24px;padding:32px 28px;text-align:center;color:#fff;display:none;z-index:40;min-width:290px;box-shadow:0 0 60px rgba(0,100,255,0.3);}
+#gameOverPanel.show{display:block;}
+#gameOverPanel h2{font-family:'Bebas Neue',sans-serif;font-size:42px;color:#ff4444;margin-bottom:4px;text-shadow:0 0 20px rgba(255,68,68,0.6);}
+#newBestBadge{display:none;background:linear-gradient(135deg,#ffd700,#ff9500);color:#000;font-size:11px;font-weight:700;letter-spacing:2px;padding:3px 12px;border-radius:20px;margin:0 auto 10px;width:fit-content;}
+.statRow{display:flex;justify-content:space-between;gap:10px;margin:14px 0;flex-wrap:wrap;}
+.stat{flex:1;min-width:55px;}
+.statVal{font-family:'Bebas Neue',sans-serif;font-size:28px;color:#fff;}
+.statLabel{font-size:9px;letter-spacing:2px;color:rgba(255,255,255,0.4);margin-top:-4px;}
+.statVal.gold{color:#ffd700;text-shadow:0 0 15px rgba(255,215,0,0.5);}
+.divider{height:1px;background:rgba(255,255,255,0.08);margin:10px 0;}
+#restartBtn{background:linear-gradient(135deg,#00ccff,#ff6bff);border:none;color:#fff;padding:12px 36px;border-radius:50px;font-size:18px;font-family:'Bebas Neue',sans-serif;letter-spacing:2px;cursor:pointer;pointer-events:all;width:100%;margin-top:14px;box-shadow:0 0 20px rgba(0,204,255,0.4);}
+#restartBtn:active{opacity:0.85;}
+
+.floatText{position:absolute;pointer-events:none;font-family:'Bebas Neue',sans-serif;font-size:24px;font-weight:700;color:#ffd700;text-shadow:0 0 10px rgba(255,215,0,0.8);z-index:15;animation:floatUp 0.9s forwards;}
+@keyframes floatUp{0%{opacity:1;transform:translateY(0) scale(1);}100%{opacity:0;transform:translateY(-60px) scale(0.7);}}
+#flash{position:absolute;inset:0;pointer-events:none;z-index:25;opacity:0;}
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <div id="flash"></div>
+  <div id="hud">
+    <div id="topRow">
+      <div id="collectibleBox"><div id="collectibleDisplay">⭐ 0 💎 0 🟡 0</div></div>
+      <div id="scoreBox"><div id="scoreLabel">SCORE</div><div id="scoreDisplay">0</div></div>
+      <div id="bestBox"><div id="bestLabel">BEST</div><div id="bestDisplay">0</div></div>
+    </div>
+  </div>
+  <div id="comboDisplay">COMBO x3 🔥</div>
+  <div id="multiplierDisplay">× 2 MULTIPLIER</div>
+  <div id="speedDisplay">SPEED: 1x</div>
+  <div id="laneGuide"><div class="laneDot" id="dot0"></div><div class="laneDot active" id="dot1"></div><div class="laneDot" id="dot2"></div></div>
+  <div id="speedBarWrap"><div id="speedBar"></div></div>
+  <div id="powerupDisplay"></div>
+
+  <div id="startScreen">
+    <h1>CUBE<br>RUSH</h1>
+    <div class="subtitle">ENDLESS RUNNER</div>
+    <div class="highScoreRow">BEST: <span id="hsDisplay">0</span></div>
+    <button class="startBtn" id="mainStartBtn">▶ PLAY</button>
+    <div class="tip">← → SWIPE LANE &nbsp;|&nbsp; ↑ JUMP &nbsp;|&nbsp; ↓ SLIDE<br>🚗 🚌 🪑 📦</div>
+  </div>
+
+  <div id="gameOverPanel">
+    <h2>GAME OVER</h2>
+    <div id="newBestBadge">⭐ NEW BEST!</div>
+    <div class="statRow">
+      <div class="stat"><div class="statVal" id="finalScore">0</div><div class="statLabel">SCORE</div></div>
+      <div class="stat"><div class="statVal gold" id="finalStars">0</div><div class="statLabel">STARS</div></div>
+      <div class="stat"><div class="statVal gold" id="finalDiamonds">0</div><div class="statLabel">DIAMONDS</div></div>
+      <div class="stat"><div class="statVal gold" id="finalCoins">0</div><div class="statLabel">COINS</div></div>
+      <div class="stat"><div class="statVal" id="finalMaxCombo">0</div><div class="statLabel">COMBO</div></div>
+    </div>
+    <div class="divider"></div>
+    <div style="color:rgba(255,255,255,0.4);font-size:11px;letter-spacing:2px;margin-top:8px;">BEST SCORE</div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:#ffd700;" id="bestFinal">0</div>
+    <button id="restartBtn">▶ PLAY AGAIN</button>
+  </div>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.157.0/build/three.module.js"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+const LANES = [-2, 0, 2];
+const BASE_SPEED = 0.20;
+const MAX_SPEED = 0.65;
+const SPEED_INCREMENT = 0.0003;
+const GROUND_LENGTH = 100;
+const TILE_SIZE = 4;
+const GRAVITY = 0.035;
+const JUMP_VEL = 0.48;
+
+const container = document.getElementById('gameContainer');
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(62, container.clientWidth/container.clientHeight, 0.1, 220);
+camera.position.set(0, 5.5, 8.5);
+camera.lookAt(0, 0.5, -3);
+
+const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance'});
+renderer.setSize(container.clientWidth, container.clientHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+
+// ─── CUBE-TO-IMAGE EFFECT: shared scratch vector (never allocate inside game loop) ───
+const worldPos = new THREE.Vector3();
+
+let skyHue = 0.6;
+function updateSky() {
+  const col = new THREE.Color().setHSL(skyHue, 0.6, 0.08);
+  scene.background = col;
+  scene.fog = new THREE.Fog(col, 28, 95);
+}
+updateSky();
+
+const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+scene.add(ambient);
+const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+sun.position.set(10, 20, 10);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024,1024);
+sun.shadow.camera.near = 0.5;
+sun.shadow.camera.far = 50;
+scene.add(sun);
+const rimLight = new THREE.DirectionalLight(0x4488ff, 0.8);
+rimLight.position.set(-5, 3, -10);
+scene.add(rimLight);
+
+// Shared geometries for performance (reuse instead of creating new ones)
+const sharedGeos = {
+  player: new THREE.BoxGeometry(0.7,1.5,0.7),
+  groundTile: new THREE.BoxGeometry(7,0.3,TILE_SIZE),
+  trackLane: new THREE.BoxGeometry(0.14,0.04,TILE_SIZE),
+  wall: new THREE.BoxGeometry(0.3,2,TILE_SIZE),
+  barrier: new THREE.BoxGeometry(1.2,0.7,0.4),
+  tallBarrier: new THREE.BoxGeometry(1.3,2.4,0.4),
+  carBody: new THREE.BoxGeometry(1.4,0.6,2.2),
+  carRoof: new THREE.BoxGeometry(1.0,0.35,1.2),
+  carLight: new THREE.BoxGeometry(0.15,0.1,0.1),
+  busBody: new THREE.BoxGeometry(2.0,1.6,2.8),
+  busWindow: new THREE.BoxGeometry(0.3,0.3,0.05),
+  busStripe: new THREE.BoxGeometry(2.05,0.1,2.85),
+  tableTop: new THREE.BoxGeometry(1.3,0.1,1.3),
+  tableLeg: new THREE.BoxGeometry(0.1,0.6,0.1),
+  cubeBlock: new THREE.BoxGeometry(0.5,0.5,0.5),
+  coinCylinder: new THREE.CylinderGeometry(0.35,0.35,0.15,12),
+  diamond: new THREE.OctahedronGeometry(0.4,0),
+  diamondRing: new THREE.TorusGeometry(0.45,0.04,4,12),
+  powerupRing: new THREE.TorusGeometry(0.65,0.05,6,12),
+  building: null,
+  buildingWindow: new THREE.BoxGeometry(0.35,0.4,0.05),
+  shieldRing: new THREE.TorusGeometry(0.9,0.07,8,16),
+};
+
+// Shared materials for performance
+const sharedMats = {
+  player: new THREE.MeshLambertMaterial({color:0x00ffcc}),
+  barrier: new THREE.MeshLambertMaterial({color:0xff3333}),
+  tallBarrier: new THREE.MeshLambertMaterial({color:0xff8800}),
+  car: new THREE.MeshLambertMaterial({color:0xff4444}),
+  carRoof: new THREE.MeshLambertMaterial({color:0xff6666}),
+  carLight: new THREE.MeshLambertMaterial({color:0xffff00}),
+  bus: new THREE.MeshLambertMaterial({color:0xffaa00}),
+  busStripe: new THREE.MeshLambertMaterial({color:0xffcc00}),
+  table: new THREE.MeshLambertMaterial({color:0x8B4513}),
+  tableLeg: new THREE.MeshLambertMaterial({color:0x654321}),
+  cubeBarrier: new THREE.MeshLambertMaterial({color:0x6666ff}),
+  coin: new THREE.MeshLambertMaterial({color:0xffd700}),
+  star: new THREE.MeshLambertMaterial({color:0xffff00}),
+  diamond: new THREE.MeshLambertMaterial({color:0x00ffff}),
+  shield: new THREE.MeshLambertMaterial({color:0x00ccff, transparent:true, opacity:0.7}),
+  magnet: new THREE.MeshLambertMaterial({color:0xff44ff}),
+  x2: new THREE.MeshLambertMaterial({color:0x00ff88}),
+  ground: new THREE.MeshLambertMaterial({color:0x2a2a3a}),
+  track: new THREE.MeshLambertMaterial({color:0x4a4a5a}),
+  building: new THREE.MeshLambertMaterial({color:0x1a1a2a}),
+  wall: new THREE.MeshLambertMaterial({color:0x444455}),
+  window: new THREE.MeshLambertMaterial({color:0xffee88}),
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CUBE-TO-IMAGE EFFECT SYSTEM
+// Pre-create exactly 5 reusable sprites at startup. Zero allocations in the
+// game loop. Sprites are added directly to the scene (world space), so
+// cube.getWorldPosition() → effect.position.copy() gives exact placement even
+// though cubes live inside THREE.Group parents.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── 1. Emoji symbols rendered onto Canvas textures ───────────────────────────
+// Five distinct images. We use Canvas so there is NO network request and NO
+// loading latency — textures exist at frame 0.
+const EFFECT_SYMBOLS = ['💥', '⭐', '🔥', '💫', '⚡'];
+const EFFECT_POOL_SIZE = 5;
+
+// Helper: draw one emoji onto a 128×128 canvas and return a CanvasTexture.
+// Called once per slot at startup — never called again during gameplay.
+function makeEffectTexture(symbol) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128; canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 128, 128);
+  ctx.font = '88px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(symbol, 64, 64);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// ─── 2. Build the pool ────────────────────────────────────────────────────────
+// effectPool[i] = { sprite, material, active, progress, startScale }
+// active   → true while the animation is running
+// progress → 0..1 animation clock (driven in updateEffects())
+const effectPool = [];
+let effectIndex = 0; // rotation pointer: 0→1→2→3→4→0→…
+
+for (let i = 0; i < EFFECT_POOL_SIZE; i++) {
+  const tex  = makeEffectTexture(EFFECT_SYMBOLS[i]);
+  const mat  = new THREE.SpriteMaterial({
+    map: tex,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,   // sprites don't corrupt the depth buffer
+  });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(0, 0, 1);   // invisible at rest
+  sprite.visible = false;
+  scene.add(sprite);            // world-space — never inside a Group
+
+  effectPool.push({ sprite, material: mat, active: false, progress: 0 });
+}
+
+// ─── 3. Acquire the next slot from the pool (rotation system) ─────────────────
+// If the chosen slot is still mid-animation we forcibly reset it first so it is
+// always available. This prevents starvation on very fast hit chains.
+function acquireEffect() {
+  const slot = effectPool[effectIndex];
+  // Force-return any in-flight animation so the slot is clean
+  if (slot.active) returnEffect(slot);
+  effectIndex = (effectIndex + 1) % EFFECT_POOL_SIZE;
+  return slot;
+}
+
+// ─── 4. Return a slot to the pool ────────────────────────────────────────────
+function returnEffect(slot) {
+  slot.active   = false;
+  slot.progress = 0;
+  slot.sprite.visible = false;
+  slot.material.opacity = 0;
+  slot.sprite.scale.set(0, 0, 1);
+}
+
+// ─── 5. Trigger: called exactly once per cube hit ─────────────────────────────
+// cube        → the THREE.Mesh (child of a THREE.Group obstacle)
+// Requirement §7 §8: use getWorldPosition + position.copy for exact placement.
+function triggerCubeEffect(cube) {
+  // § 5: hide the cube by making its material transparent
+  cube.material.transparent = true;
+  cube.material.opacity = 0;
+
+  // § 7+8: resolve world coordinates — works regardless of Group nesting depth
+  cube.getWorldPosition(worldPos);          // writes into the shared scratch vec
+
+  const slot = acquireEffect();             // rotation system picks next slot
+  slot.sprite.position.copy(worldPos);      // exact world position
+  slot.sprite.position.y += 0.25;          // slight upward offset for readability
+  slot.sprite.scale.set(0.1, 0.1, 1);      // start tiny (scale-in animation)
+  slot.material.opacity = 1;
+  slot.sprite.visible = true;
+  slot.active   = true;
+  slot.progress = 0;                        // restart the 0→1 animation clock
+}
+
+// ─── 6. Per-frame animator — call once inside update() ───────────────────────
+// No allocations: all math is on primitives or the pre-allocated worldPos vec.
+// Animation phases (progress 0→1, ~40 frames at 60 fps):
+//   0.00–0.40  scale up  (ease-out)
+//   0.00–0.70  rotate    (continuous spin)
+//   0.55–1.00  fade out  (linear)
+const EFFECT_DURATION = 0.65;  // seconds (progress increments by deltaT / duration)
+
+function updateEffects(deltaT) {
+  for (let i = 0; i < EFFECT_POOL_SIZE; i++) {
+    const slot = effectPool[i];
+    if (!slot.active) continue;
+
+    slot.progress += deltaT / EFFECT_DURATION;
+
+    if (slot.progress >= 1.0) {
+      returnEffect(slot);
+      continue;
+    }
+
+    const t = slot.progress; // 0→1
+
+    // Scale: ease-out cubic  0→1.8→1.4 (pop then settle)
+    let s;
+    if (t < 0.4) {
+      s = 1.8 * (t / 0.4);              // ramp up
+    } else {
+      s = 1.8 - 0.4 * ((t - 0.4) / 0.6); // gentle settle
+    }
+    slot.sprite.scale.set(s, s, 1);
+
+    // Rotation: Sprite.material.rotation (radians, in screen space)
+    slot.material.rotation = t * Math.PI * 2.5; // 1.25 full turns
+
+    // Fade: hold opaque until 55%, then linear fade to 0
+    slot.material.opacity = t < 0.55 ? 1 : 1 - (t - 0.55) / 0.45;
+  }
+}
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const playerGroup = new THREE.Group();
+const playerMesh = new THREE.Mesh(sharedGeos.player, sharedMats.player);
+playerMesh.castShadow = true;
+playerGroup.add(playerMesh);
+
+const shieldRing = new THREE.Mesh(sharedGeos.shieldRing, sharedMats.shield);
+shieldRing.rotation.x = Math.PI/2;
+shieldRing.visible = false;
+playerGroup.add(shieldRing);
+playerGroup.position.set(0, 0.75, 0);
+scene.add(playerGroup);
+
+// Simplified particles for performance
+const particleGroup = new THREE.Group();
+scene.add(particleGroup);
+const MAX_PARTICLES = 150;
+let particlePool = [];
+
+function spawnParticles(x,y,z,r,g,b,count=8){
+  for(let i=0;i<count;i++){
+    if(particlePool.length >= MAX_PARTICLES){
+      const old = particlePool.shift();
+      particleGroup.remove(old);
+      if(old.geometry) old.geometry.dispose();
+    }
+    const geo = new THREE.SphereGeometry(0.08+Math.random()*0.1,4,4);
+    const mat = new THREE.MeshBasicMaterial({color:new THREE.Color(r,g,b), transparent:true, opacity:1});
+    const p = new THREE.Mesh(geo, mat);
+    p.position.set(x,y,z);
+    p.userData = {
+      vx: (Math.random()-0.5)*0.15,
+      vy: 0.05+Math.random()*0.15,
+      vz: (Math.random()-0.5)*0.15,
+      life: 0.6+Math.random()*0.4
+    };
+    particleGroup.add(p);
+    particlePool.push(p);
+  }
+}
+
+function updateParticles(){
+  for(let i=particlePool.length-1;i>=0;i--){
+    const p = particlePool[i];
+    p.userData.life -= 0.025;
+    if(p.userData.life <= 0){
+      particleGroup.remove(p);
+      if(p.geometry) p.geometry.dispose();
+      if(p.material) p.material.dispose();
+      particlePool.splice(i,1);
+      continue;
+    }
+    p.position.x += p.userData.vx;
+    p.position.y += p.userData.vy;
+    p.position.z += p.userData.vz;
+    p.userData.vy -= 0.004;
+    p.material.opacity = p.userData.life;
+    p.scale.setScalar(p.userData.life);
+  }
+}
+
+let groundTiles=[], obstacles=[], coins=[], stars=[], diamonds=[], buildings=[], walls=[], powerups=[];
+
+function createGroundTile(z){
+  const group=new THREE.Group();
+  const g=new THREE.Mesh(sharedGeos.groundTile, sharedMats.ground);
+  g.position.y=-0.15; g.receiveShadow=true; group.add(g);
+  LANES.forEach(lx=>{
+    const t=new THREE.Mesh(sharedGeos.trackLane, sharedMats.track);
+    t.position.set(lx,0.05,0); group.add(t);
+  });
+  group.position.z=z; scene.add(group); return group;
+}
+
+function createWallRow(z){
+  const group=new THREE.Group();
+  const l=new THREE.Mesh(sharedGeos.wall, sharedMats.wall); l.position.set(-3.8,1,0); l.castShadow=true; group.add(l);
+  const r=new THREE.Mesh(sharedGeos.wall, sharedMats.wall); r.position.set(3.8,1,0); r.castShadow=true; group.add(r);
+  group.position.z=z; scene.add(group); return group;
+}
+
+function createBarrier(lane,z){
+  const group=new THREE.Group();
+  const mesh=new THREE.Mesh(sharedGeos.barrier, sharedMats.barrier);
+  mesh.position.y=0.35; mesh.castShadow=true; group.add(mesh);
+  group.position.set(LANES[lane],0,z);
+  group.userData={type:'barrier', height:0.7};
+  scene.add(group); return group;
+}
+
+function createTallBarrier(lane,z){
+  const group=new THREE.Group();
+  const mesh=new THREE.Mesh(sharedGeos.tallBarrier, sharedMats.tallBarrier);
+  mesh.position.y=1.2; mesh.castShadow=true; group.add(mesh);
+  group.position.set(LANES[lane],0,z);
+  group.userData={type:'tall', height:2.4};
+  scene.add(group); return group;
+}
+
+function createCar(lane,z){
+  const group=new THREE.Group();
+  const body=new THREE.Mesh(sharedGeos.carBody, sharedMats.car);
+  body.position.y=0.45; body.castShadow=true; group.add(body);
+  const roof=new THREE.Mesh(sharedGeos.carRoof, sharedMats.carRoof);
+  roof.position.y=0.9; roof.position.z=-0.2; group.add(roof);
+  const l1=new THREE.Mesh(sharedGeos.carLight, sharedMats.carLight);
+  l1.position.set(0.55,0.5,1.1); group.add(l1);
+  const l2=new THREE.Mesh(sharedGeos.carLight, sharedMats.carLight);
+  l2.position.set(-0.55,0.5,1.1); group.add(l2);
+  group.position.set(LANES[lane],0,z);
+  group.userData={type:'car', height:1.25};
+  scene.add(group); return group;
+}
+
+function createBus(lane,z){
+  const group=new THREE.Group();
+  const body=new THREE.Mesh(sharedGeos.busBody, sharedMats.bus);
+  body.position.y=0.85; body.castShadow=true; group.add(body);
+  for(let i=-0.7;i<=0.7;i+=0.45){
+    const w=new THREE.Mesh(sharedGeos.busWindow, sharedMats.window);
+    w.position.set(i,1.1,1.43); group.add(w);
+  }
+  const stripe=new THREE.Mesh(sharedGeos.busStripe, sharedMats.busStripe);
+  stripe.position.y=1.2; group.add(stripe);
+  group.position.set(LANES[lane],0,z);
+  group.userData={type:'bus', height:1.65};
+  scene.add(group); return group;
+}
+
+function createTable(lane,z){
+  const group=new THREE.Group();
+  const top=new THREE.Mesh(sharedGeos.tableTop, sharedMats.table);
+  top.position.y=0.65; top.castShadow=true; group.add(top);
+  for(let ix=-0.4;ix<=0.4;ix+=0.8){
+    for(let iz=-0.4;iz<=0.4;iz+=0.8){
+      const leg=new THREE.Mesh(sharedGeos.tableLeg, sharedMats.tableLeg);
+      leg.position.set(ix,0.3,iz); group.add(leg);
+    }
+  }
+  group.position.set(LANES[lane],0,z);
+  group.userData={type:'table', height:0.7};
+  scene.add(group); return group;
+}
+
+function createCubeBarrier(lane,z){
+  const group=new THREE.Group();
+  const positions=[[0,0.35,0],[0.4,0.35,0.3],[-0.4,0.35,-0.3],[0,1.05,0],[0.3,1.05,0.2],[-0.3,1.05,-0.2]];
+  positions.forEach(([px,py,pz])=>{
+    const c=new THREE.Mesh(sharedGeos.cubeBlock, sharedMats.cubeBarrier);
+    c.position.set(px,py,pz); c.castShadow=true; group.add(c);
+  });
+  group.position.set(LANES[lane],0,z);
+  group.userData={type:'cubeBarrier', height:1.3};
+  scene.add(group); return group;
+}
+
+function createCoin(lane,z,height=1.3){
+  const group=new THREE.Group();
+  const mesh=new THREE.Mesh(sharedGeos.coinCylinder, sharedMats.coin);
+  mesh.rotation.x=Math.PI/2; mesh.castShadow=true; group.add(mesh);
+  group.position.set(LANES[lane],height,z);
+  group.userData={type:'coin', collected:false};
+  scene.add(group); return group;
+}
+
+function createStar(lane,z,height=1.5){
+  const group=new THREE.Group();
+  const shape=new THREE.Shape();
+  for(let i=0;i<10;i++){
+    const r=i%2===0?0.4:0.18;
+    const a=(i*Math.PI)/5-Math.PI/2;
+    if(i===0) shape.moveTo(Math.cos(a)*r, Math.sin(a)*r);
+    else shape.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+  }
+  shape.closePath();
+  const geo=new THREE.ExtrudeGeometry(shape,{depth:0.12,bevelEnabled:true,bevelThickness:0.04,bevelSize:0.04});
+  const mesh=new THREE.Mesh(geo, sharedMats.star);
+  mesh.castShadow=true; group.add(mesh);
+  group.position.set(LANES[lane],height,z);
+  group.userData={type:'star', collected:false};
+  scene.add(group); return group;
+}
+
+function createDiamond(lane,z,height=1.6){
+  const group=new THREE.Group();
+  const mesh=new THREE.Mesh(sharedGeos.diamond, sharedMats.diamond);
+  mesh.castShadow=true; group.add(mesh);
+  const ring=new THREE.Mesh(sharedGeos.diamondRing, sharedMats.diamond);
+  ring.rotation.x=Math.PI/2; group.add(ring);
+  group.position.set(LANES[lane],height,z);
+  group.userData={type:'diamond', collected:false};
+  scene.add(group); return group;
+}
+
+function createPowerup(lane,z,ptype){
+  const group=new THREE.Group();
+  let mat, geo;
+  if(ptype==='shield'){mat=sharedMats.shield; geo=new THREE.OctahedronGeometry(0.5);}
+  else if(ptype==='magnet'){mat=sharedMats.magnet; geo=new THREE.BoxGeometry(0.5,0.7,0.3);}
+  else{mat=sharedMats.x2; geo=new THREE.BoxGeometry(0.55,0.55,0.55);}
+  const mesh=new THREE.Mesh(geo,mat); mesh.castShadow=true; group.add(mesh);
+  const ring=new THREE.Mesh(sharedGeos.powerupRing, mat);
+  ring.rotation.x=Math.PI/2; group.add(ring);
+  group.position.set(LANES[lane],1.4,z);
+  group.userData={type:'powerup', ptype, collected:false};
+  scene.add(group); return group;
+}
+
+function createBuilding(x,z){
+  const h=3+Math.random()*8, w=1.2+Math.random()*2;
+  const group=new THREE.Group();
+  const geo=new THREE.BoxGeometry(w,h,2.5);
+  const mesh=new THREE.Mesh(geo, sharedMats.building);
+  mesh.position.y=h/2; mesh.castShadow=true; mesh.receiveShadow=true; group.add(mesh);
+  const winCount=Math.floor(h/1.5)*Math.floor(w/0.8);
+  for(let i=0;i<winCount;i++){
+    if(Math.random()<0.5){
+      const wx=(Math.random()-0.5)*w*0.7;
+      const wy=0.8+Math.random()*(h-1.2);
+      const wm=new THREE.Mesh(sharedGeos.buildingWindow, sharedMats.window);
+      wm.position.set(wx,wy,1.28); group.add(wm);
+    }
+  }
+  group.position.set(x,0,z);
+  scene.add(group); return group;
+}
+
+let running=false, gameOver=false, gameStarted=false;
+let score=0, coinCount=0, starCount=0, diamondCount=0, highScore=parseInt(localStorage.getItem('cubeRushHS')||'0');
+let comboCount=0, maxCombo=0, comboTimer=0, multiplier=1;
+let currentLane=1, targetLane=1;
+let playerY=0, velocityY=0, jumping=false, sliding=false, slideTimer=0;
+let currentSpeed=BASE_SPEED;
+let spawnTimer=0, coinSpawnTimer=0, starSpawnTimer=0, diamondSpawnTimer=0, powerupTimer=0;
+let shieldActive=false, shieldTimer=0;
+let magnetActive=false, magnetTimer=0;
+let x2Active=false, x2Timer=0;
+let distanceTravelled=0, skyPhase=0, cameraShake=0;
+let speedLevel=1;
+
+document.getElementById('hsDisplay').textContent=highScore;
+document.getElementById('bestDisplay').textContent=highScore;
+
+function clearAll(){
+  [...groundTiles,...obstacles,...coins,...stars,...diamonds,...buildings,...walls,...powerups].forEach(obj=>{
+    scene.remove(obj);
+    obj.traverse(c=>{if(c.geometry && !Object.values(sharedGeos).includes(c.geometry))c.geometry.dispose();});
+  });
+  groundTiles=[];obstacles=[];coins=[];stars=[];diamonds=[];buildings=[];walls=[];powerups=[];
+}
+
+function initWorld(){
+  clearAll();
+  for(let z=0;z>-GROUND_LENGTH;z-=TILE_SIZE){
+    groundTiles.push(createGroundTile(z));
+    walls.push(createWallRow(z));
+  }
+  for(let z=0;z>-GROUND_LENGTH;z-=5){
+    const side=Math.random()>0.5?1:-1;
+    buildings.push(createBuilding(side*(5.5+Math.random()*3),z));
+    if(Math.random()<0.35) buildings.push(createBuilding(-side*(5.5+Math.random()*3),z-2));
+  }
+}
+
+function updateCollectibleDisplay(){
+  document.getElementById('collectibleDisplay').innerHTML = `⭐ ${starCount} 💎 ${diamondCount} 🟡 ${coinCount}`;
+}
+
+function startGame(){
+  clearAll();
+  running=true; gameOver=false; gameStarted=true;
+  score=0; coinCount=0; starCount=0; diamondCount=0;
+  comboCount=0; maxCombo=0; comboTimer=0; multiplier=1;
+  currentLane=1; targetLane=1;
+  playerY=0; velocityY=0; jumping=false; sliding=false; slideTimer=0;
+  currentSpeed=BASE_SPEED; speedLevel=1;
+  spawnTimer=0.5; coinSpawnTimer=0.2; starSpawnTimer=1; diamondSpawnTimer=1.8; powerupTimer=4;
+  shieldActive=false; magnetActive=false; x2Active=false;
+  distanceTravelled=0; skyPhase=0;
+
+  shieldRing.visible=false;
+  // ── CUBE-TO-IMAGE EFFECT: flush all slots on restart ──
+  // Without this, a slot mid-animation from the previous game would remain
+  // visible at its last world position during the new game's first frames.
+  for (let i = 0; i < EFFECT_POOL_SIZE; i++) returnEffect(effectPool[i]);
+  effectIndex = 0;
+  // ───────────────────────────────────────────────────────
+  playerGroup.position.set(LANES[1],0.75,0);
+  playerGroup.scale.set(1,1,1);
+
+  document.getElementById('scoreDisplay').textContent='0';
+  updateCollectibleDisplay();
+  document.getElementById('comboDisplay').style.opacity='0';
+  document.getElementById('multiplierDisplay').style.opacity='0';
+  document.getElementById('speedDisplay').textContent='SPEED: 1x';
+  document.getElementById('startScreen').style.display='none';
+  document.getElementById('gameOverPanel').classList.remove('show');
+
+  initWorld();
+  spawnObstacle();
+  spawnCoins();spawnCoins();
+  updateLaneDots();
+}
+
+function endGame(){
+  running=false; gameOver=true;
+  cameraShake=0.5;
+  flashScreen('#ff0000',0.6);
+  const isNew=score>highScore;
+  if(isNew){highScore=score;localStorage.setItem('cubeRushHS',highScore);}
+  document.getElementById('finalScore').textContent=score;
+  document.getElementById('finalStars').textContent=starCount;
+  document.getElementById('finalDiamonds').textContent=diamondCount;
+  document.getElementById('finalCoins').textContent=coinCount;
+  document.getElementById('finalMaxCombo').textContent=maxCombo;
+  document.getElementById('bestFinal').textContent=highScore;
+  document.getElementById('bestDisplay').textContent=highScore;
+  document.getElementById('newBestBadge').style.display=isNew?'block':'none';
+  document.getElementById('gameOverPanel').classList.add('show');
+}
+
+function flashScreen(color,opacity){
+  const el=document.getElementById('flash');
+  el.style.background=color; el.style.opacity=opacity;
+  setTimeout(()=>{el.style.transition='opacity 0.4s';el.style.opacity='0';},50);
+  setTimeout(()=>{el.style.transition='';},500);
+}
+
+function addCombo(){
+  comboCount++; comboTimer=2.5;
+  if(comboCount>maxCombo) maxCombo=comboCount;
+  if(comboCount>=3){
+    const el=document.getElementById('comboDisplay');
+    el.textContent=`COMBO x${comboCount} ${comboCount>=8?'💥':comboCount>=5?'🔥':'⚡'}`;
+    el.style.opacity='1';
+  }
+  multiplier=comboCount>=10?4:comboCount>=6?3:comboCount>=3?2:1;
+  if(multiplier>1){
+    const el=document.getElementById('multiplierDisplay');
+    el.textContent=`× ${multiplier} MULTIPLIER`;
+    el.style.opacity='1';
+  }
+}
+
+function resetCombo(){
+  comboCount=0; multiplier=1;
+  document.getElementById('comboDisplay').style.opacity='0';
+  document.getElementById('multiplierDisplay').style.opacity='0';
+}
+
+function activatePowerup(ptype){
+  const el=document.getElementById('powerupDisplay');
+  if(ptype==='shield'){shieldActive=true;shieldTimer=8;shieldRing.visible=true;el.style.color='#00ccff';el.textContent='🛡 SHIELD';flashScreen('#00ccff',0.25);}
+  else if(ptype==='magnet'){magnetActive=true;magnetTimer=8;el.style.color='#ff44ff';el.textContent='🧲 MAGNET';flashScreen('#ff44ff',0.2);}
+  else{x2Active=true;x2Timer=8;el.style.color='#00ff88';el.textContent='×2 SCORE';flashScreen('#00ff88',0.2);}
+  el.style.opacity='1';
+  setTimeout(()=>{el.style.opacity='0';},2000);
+}
+
+const obstacleCreators = [createBarrier,createTallBarrier,createCar,createBus,createTable,createCubeBarrier];
+
+function spawnObstacle(){
+  const z=camera.position.z-42;
+  const r=Math.random();
+  let creator;
+  if(r<0.2) creator=createBarrier;
+  else if(r<0.35) creator=createTallBarrier;
+  else if(r<0.5) creator=createCar;
+  else if(r<0.65) creator=createBus;
+  else if(r<0.8) creator=createTable;
+  else creator=createCubeBarrier;
+  const lane=Math.floor(Math.random()*3);
+  obstacles.push(creator(lane,z));
+  if(Math.random()<0.3+speedLevel*0.02){
+    const lane2=(lane+1+Math.floor(Math.random()*2))%3;
+    if(lane2!==lane) obstacles.push(creator(lane2,z-2));
+  }
+}
+
+function spawnCoins(){
+  const z=camera.position.z-38;
+  const p=Math.floor(Math.random()*6);
+  if(p===0) coins.push(createCoin(Math.floor(Math.random()*3),z));
+  else if(p===1) for(let i=0;i<3;i++) coins.push(createCoin(i,z-i*1.5));
+  else if(p===2){const l=Math.floor(Math.random()*3);for(let i=0;i<5;i++)coins.push(createCoin(l,z-i*1.2,0.9+i*0.25));}
+  else if(p===3){coins.push(createCoin(0,z,1.5));coins.push(createCoin(1,z-1,2));coins.push(createCoin(2,z-2,1.5));}
+  else if(p===4){for(let i=0;i<3;i++)for(let l=0;l<3;l++)if(Math.random()<0.5)coins.push(createCoin(l,z-i*1.3));}
+  else{coins.push(createCoin(0,z));coins.push(createCoin(2,z));coins.push(createCoin(1,z-1.2,2));}
+}
+
+function spawnStarItem(){
+  const z=camera.position.z-38;
+  stars.push(createStar(Math.floor(Math.random()*3),z,1.4+Math.random()*0.6));
+}
+function spawnDiamondItem(){
+  diamonds.push(createDiamond(Math.floor(Math.random()*3),camera.position.z-39,1.5+Math.random()*0.4));
+}
+function spawnPowerupItem(){
+  const types=['shield','magnet','x2'];
+  powerups.push(createPowerup(Math.floor(Math.random()*3),camera.position.z-40,types[Math.floor(Math.random()*3)]));
+}
+
+function updateLaneDots(){
+  for(let i=0;i<3;i++) document.getElementById('dot'+i).classList.toggle('active',i===targetLane);
+}
+
+function collectItem(item,type){
+  if(type==='coin')coinCount++;
+  else if(type==='star')starCount++;
+  else if(type==='diamond')diamondCount++;
+  updateCollectibleDisplay();
+  addCombo();
+  const c={coin:[1,0.85,0],star:[1,1,0],diamond:[0,1,1]}[type];
+  spawnParticles(item.position.x,item.position.y,item.position.z,c[0],c[1],c[2],6);
+}
+
+function attractCollectible(item){
+  const dx=item.position.x-playerGroup.position.x;
+  const dz=item.position.z-playerGroup.position.z;
+  const dist=Math.sqrt(dx*dx+dz*dz);
+  if(dist<6){item.position.x-=dx*0.12;item.position.z-=dz*0.12;item.position.y+=(playerGroup.position.y+0.5-item.position.y)*0.06;}
+}
+
+function update(){
+  if(!running) return;
+
+  // Progressive speed increase
+  distanceTravelled += currentSpeed;
+  currentSpeed = Math.min(MAX_SPEED, BASE_SPEED + distanceTravelled * SPEED_INCREMENT);
+  speedLevel = Math.floor((currentSpeed - BASE_SPEED) / 0.05) + 1;
+  
+  document.getElementById('speedDisplay').textContent = `SPEED: ${speedLevel}x`;
+  document.getElementById('speedBar').style.width = Math.min(100, ((currentSpeed-BASE_SPEED)/(MAX_SPEED-BASE_SPEED))*100)+'%';
+
+  const baseScoreGain = Math.floor(currentSpeed * 10) * (x2Active?2:1) * multiplier;
+  score += baseScoreGain;
+  document.getElementById('scoreDisplay').textContent = score;
+
+  skyPhase += 0.00015;
+  skyHue = 0.62 + Math.sin(skyPhase)*0.12;
+  updateSky();
+
+  if(cameraShake>0){
+    camera.position.x = Math.sin(cameraShake*50)*cameraShake*0.3;
+    camera.position.y = 5.5 + Math.cos(cameraShake*40)*cameraShake*0.2;
+    cameraShake = Math.max(0, cameraShake-0.02);
+    if(cameraShake<=0){camera.position.x=0;camera.position.y=5.5;}
+  }
+
+  playerGroup.position.x += (LANES[targetLane]-playerGroup.position.x)*0.28;
+
+  if(jumping){
+    velocityY -= GRAVITY;
+    playerY += velocityY;
+    if(playerY<=0){playerY=0;velocityY=0;jumping=false;}
+  }
+
+  if(sliding){
+    slideTimer -= 0.016;
+    playerGroup.position.y = 0.25 + playerY;
+    playerGroup.scale.y = 0.35;
+    if(slideTimer<=0){sliding=false;playerGroup.scale.y=1;playerGroup.position.y=0.75+playerY;}
+  } else {
+    playerGroup.position.y = 0.75 + playerY;
+  }
+
+  if(comboTimer>0){comboTimer-=0.016;if(comboTimer<=0)resetCombo();}
+  if(shieldActive){shieldTimer-=0.016;if(shieldTimer<=0){shieldActive=false;shieldRing.visible=false;}}
+  if(magnetActive){magnetTimer-=0.016;if(magnetTimer<=0)magnetActive=false;}
+  if(x2Active){x2Timer-=0.016;if(x2Timer<=0)x2Active=false;}
+
+  // Obstacles
+  for(let i=obstacles.length-1;i>=0;i--){
+    const o=obstacles[i];
+    o.position.z += currentSpeed;
+    const dx=Math.abs(o.position.x-playerGroup.position.x);
+    const dz=Math.abs(o.position.z-playerGroup.position.z);
+    if(dz<0.9){
+      let hit=false;
+      const type=o.userData.type, h=o.userData.height||1;
+      const ptop=playerGroup.position.y+(sliding?0.3:0.75);
+      const pbot=playerGroup.position.y-(sliding?0.15:0.75);
+      if(type==='car'||type==='bus'){if(pbot<h+0.1&&dx<1.2)hit=true;}
+      else if(type==='barrier'||type==='table'){if(pbot<h+0.1&&dx<1.1)hit=true;}
+      else if(type==='tall'||type==='cubeBarrier'){if(!sliding&&ptop<h+0.2&&dx<1.1)hit=true;}
+      if(hit){
+        if(shieldActive){
+          shieldActive=false;shieldTimer=0;shieldRing.visible=false;
+          spawnParticles(playerGroup.position.x,playerGroup.position.y,playerGroup.position.z,0,0.8,1,15);
+          flashScreen('#00ccff',0.5);
+          // ── CUBE-TO-IMAGE EFFECT: shield deflects the obstacle ──────────────
+          // Iterate the obstacle group's children and trigger the effect on every
+          // visible cube mesh. The group is a THREE.Group (parent), so we MUST use
+          // getWorldPosition (done inside triggerCubeEffect) to get world coords.
+          o.traverse(child => {
+            if (child.isMesh) triggerCubeEffect(child);
+          });
+          // ────────────────────────────────────────────────────────────────────
+          scene.remove(o);obstacles.splice(i,1);continue;
+        }
+        spawnParticles(playerGroup.position.x,playerGroup.position.y,playerGroup.position.z,1,0.2,0.2,25);
+        endGame();return;
+      }
+    }
+    if(o.position.z>playerGroup.position.z+1&&!o.userData.passed){o.userData.passed=true;addCombo();}
+    if(o.position.z>12){scene.remove(o);obstacles.splice(i,1);}
+  }
+
+  // Coins
+  for(let i=coins.length-1;i>=0;i--){
+    const c=coins[i];c.position.z+=currentSpeed;c.rotation.y+=0.04;
+    if(magnetActive)attractCollectible(c);
+    if(!c.userData.collected&&Math.abs(c.position.x-playerGroup.position.x)<0.85&&Math.abs(c.position.z-playerGroup.position.z)<0.85){c.userData.collected=true;collectItem(c,'coin');scene.remove(c);coins.splice(i,1);continue;}
+    if(c.position.z>12){scene.remove(c);coins.splice(i,1);}
+  }
+
+  // Stars
+  for(let i=stars.length-1;i>=0;i--){
+    const s=stars[i];s.position.z+=currentSpeed;s.rotation.y+=0.03;
+    if(magnetActive)attractCollectible(s);
+    if(!s.userData.collected&&Math.abs(s.position.x-playerGroup.position.x)<0.85&&Math.abs(s.position.z-playerGroup.position.z)<0.85){s.userData.collected=true;collectItem(s,'star');scene.remove(s);stars.splice(i,1);continue;}
+    if(s.position.z>12){scene.remove(s);stars.splice(i,1);}
+  }
+
+  // Diamonds
+  for(let i=diamonds.length-1;i>=0;i--){
+    const d=diamonds[i];d.position.z+=currentSpeed;d.rotation.y+=0.05;
+    if(magnetActive)attractCollectible(d);
+    if(!d.userData.collected&&Math.abs(d.position.x-playerGroup.position.x)<0.85&&Math.abs(d.position.z-playerGroup.position.z)<0.85){d.userData.collected=true;collectItem(d,'diamond');scene.remove(d);diamonds.splice(i,1);continue;}
+    if(d.position.z>12){scene.remove(d);diamonds.splice(i,1);}
+  }
+
+  // Powerups
+  for(let i=powerups.length-1;i>=0;i--){
+    const p=powerups[i];p.position.z+=currentSpeed;p.rotation.y+=0.05;
+    if(!p.userData.collected&&Math.abs(p.position.x-playerGroup.position.x)<0.9&&Math.abs(p.position.z-playerGroup.position.z)<0.9){p.userData.collected=true;activatePowerup(p.userData.ptype);spawnParticles(p.position.x,p.position.y,p.position.z,0.5,1,0.5,15);scene.remove(p);powerups.splice(i,1);continue;}
+    if(p.position.z>12){scene.remove(p);powerups.splice(i,1);}
+  }
+
+  // Recycle world
+  groundTiles.forEach(t=>{t.position.z+=currentSpeed;if(t.position.z>10)t.position.z-=GROUND_LENGTH+TILE_SIZE;});
+  walls.forEach(w=>{w.position.z+=currentSpeed;if(w.position.z>10)w.position.z-=GROUND_LENGTH+TILE_SIZE;});
+  buildings.forEach(b=>{b.position.z+=currentSpeed;if(b.position.z>12)b.position.z-=GROUND_LENGTH+8;});
+
+  updateParticles();
+  // ── CUBE-TO-IMAGE EFFECT: animate all active slots ──
+  // 0.016 ≈ 1/60 s fixed delta. Compatible with the existing timer pattern used
+  // throughout this codebase (comboTimer, shieldTimer, etc. all use 0.016).
+  updateEffects(0.016);
+
+  // Dynamic spawn rates based on speed
+  const speedFactor = currentSpeed / BASE_SPEED;
+  spawnTimer -= 0.016 * speedFactor;
+  if(spawnTimer<=0){spawnTimer=1.6+Math.random()*1;spawnObstacle();}
+  coinSpawnTimer -= 0.016 * speedFactor;
+  if(coinSpawnTimer<=0){coinSpawnTimer=0.5+Math.random()*0.4;spawnCoins();}
+  starSpawnTimer -= 0.016 * speedFactor;
+  if(starSpawnTimer<=0){starSpawnTimer=1.8+Math.random()*1.2;spawnStarItem();}
+  diamondSpawnTimer -= 0.016 * speedFactor;
+  if(diamondSpawnTimer<=0){diamondSpawnTimer=2.5+Math.random()*1.5;spawnDiamondItem();}
+  powerupTimer -= 0.016 * speedFactor;
+  if(powerupTimer<=0){powerupTimer=8+Math.random()*5;spawnPowerupItem();}
+}
+
+function moveLeft(){if(!running)return;targetLane=Math.max(0,targetLane-1);updateLaneDots();}
+function moveRight(){if(!running)return;targetLane=Math.min(2,targetLane+1);updateLaneDots();}
+function jumpAction(){if(!running||gameOver)return;if(!jumping&&playerY===0&&!sliding){jumping=true;velocityY=JUMP_VEL;}}
+function slideAction(){if(!running||gameOver)return;if(jumping){jumping=false;velocityY=0;playerY=0;}sliding=true;slideTimer=0.55;}
+
+window.addEventListener('keydown',e=>{
+  if(!gameStarted||gameOver){if(e.key===' '||e.key==='ArrowUp'||e.key==='w'||e.key==='Enter'){e.preventDefault();startGame();}return;}
+  if(e.key==='ArrowLeft'||e.key==='a'){e.preventDefault();moveLeft();}
+  else if(e.key==='ArrowRight'||e.key==='d'){e.preventDefault();moveRight();}
+  else if(e.key==='ArrowUp'||e.key==='w'||e.key===' '){e.preventDefault();jumpAction();}
+  else if(e.key==='ArrowDown'||e.key==='s'){e.preventDefault();slideAction();}
+});
+
+let tsX=0,tsY=0;
+window.addEventListener('touchstart',e=>{
+  if(e.target.closest('#restartBtn')||e.target.closest('#mainStartBtn'))return;
+  tsX=e.touches[0].clientX;tsY=e.touches[0].clientY;
+},{passive:true});
+
+window.addEventListener('touchend',e=>{
+  if(!gameStarted||gameOver){startGame();return;}
+  if(!running)return;
+  const dx=(e.changedTouches[0]?.clientX||0)-tsX;
+  const dy=(e.changedTouches[0]?.clientY||0)-tsY;
+  const adx=Math.abs(dx),ady=Math.abs(dy);
+  if(ady>adx&&dy>35){slideAction();return;}
+  if(ady>adx&&dy<-25){jumpAction();return;}
+  if(adx>ady){dx>20?moveRight():moveLeft();}
+  if(adx<10&&ady<10){jumpAction();}
+});
+
+document.getElementById('mainStartBtn').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();startGame();});
+document.getElementById('restartBtn').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();startGame();});
+
+function animate(){
+  requestAnimationFrame(animate);
+  update();
+  renderer.render(scene,camera);
+}
+
+window.addEventListener('resize',()=>{
+  camera.aspect=container.clientWidth/container.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(container.clientWidth,container.clientHeight);
+});
+
+initWorld();
+animate();
+</script>
+</body>
 </html>
