@@ -1,4 +1,4 @@
-8<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -132,7 +132,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 container.appendChild(renderer.domElement);
 
-// ─── CUBE-TO-IMAGE EFFECT: shared scratch vector (never allocate inside game loop) ───
+// ─── Shared scratch vector (never allocate inside game loop) ───
 const worldPos = new THREE.Vector3();
 
 let skyHue = 0.6;
@@ -156,7 +156,7 @@ const rimLight = new THREE.DirectionalLight(0x4488ff, 0.8);
 rimLight.position.set(-5, 3, -10);
 scene.add(rimLight);
 
-// Shared geometries for performance (reuse instead of creating new ones)
+// Shared geometries for performance
 const sharedGeos = {
   player: new THREE.BoxGeometry(0.7,1.5,0.7),
   groundTile: new THREE.BoxGeometry(7,0.3,TILE_SIZE),
@@ -172,14 +172,12 @@ const sharedGeos = {
   busStripe: new THREE.BoxGeometry(2.05,0.1,2.85),
   tableTop: new THREE.BoxGeometry(1.3,0.1,1.3),
   tableLeg: new THREE.BoxGeometry(0.1,0.6,0.1),
-  cubeBlock: new THREE.BoxGeometry(0.5,0.5,0.5),
   coinCylinder: new THREE.CylinderGeometry(0.35,0.35,0.15,12),
   diamond: new THREE.OctahedronGeometry(0.4,0),
   diamondRing: new THREE.TorusGeometry(0.45,0.04,4,12),
   powerupRing: new THREE.TorusGeometry(0.65,0.05,6,12),
   building: null,
   buildingWindow: new THREE.BoxGeometry(0.35,0.4,0.05),
-  shieldRing: new THREE.TorusGeometry(0.9,0.07,8,16),
 };
 
 // Shared materials for performance
@@ -194,11 +192,9 @@ const sharedMats = {
   busStripe: new THREE.MeshLambertMaterial({color:0xffcc00}),
   table: new THREE.MeshLambertMaterial({color:0x8B4513}),
   tableLeg: new THREE.MeshLambertMaterial({color:0x654321}),
-  cubeBarrier: new THREE.MeshLambertMaterial({color:0x6666ff}),
   coin: new THREE.MeshLambertMaterial({color:0xffd700}),
   star: new THREE.MeshLambertMaterial({color:0xffff00}),
   diamond: new THREE.MeshLambertMaterial({color:0x00ffff}),
-  shield: new THREE.MeshLambertMaterial({color:0x00ccff, transparent:true, opacity:0.7}),
   magnet: new THREE.MeshLambertMaterial({color:0xff44ff}),
   x2: new THREE.MeshLambertMaterial({color:0x00ff88}),
   ground: new THREE.MeshLambertMaterial({color:0x2a2a3a}),
@@ -210,15 +206,8 @@ const sharedMats = {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CUBE-TO-IMAGE EFFECT SYSTEM
-// Pre-create exactly 5 reusable sprites at startup. Zero allocations in the
-// game loop. Sprites are added directly to the scene (world space), so
-// cube.getWorldPosition() → effect.position.copy() gives exact placement even
-// though cubes live inside THREE.Group parents.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ─── 1. Jake character sprite — PNG embedded as base64 (no network request) ──
-// All 5 pool slots share ONE texture loaded from the embedded PNG.
-// The PNG has a transparent background so only the character is visible.
 const EFFECT_POOL_SIZE = 5;
 
 const _jakeImg = new Image();
@@ -226,40 +215,31 @@ _jakeImg.src = 'jake_extracted.png';
 const jakeTexture = new THREE.Texture(_jakeImg);
 _jakeImg.onload = () => { jakeTexture.needsUpdate = true; };
 
-// ─── 2. Build the pool ────────────────────────────────────────────────────────
-// effectPool[i] = { sprite, material, active, progress }
-// active   → true while the animation is running
-// progress → 0..1 animation clock (driven in updateEffects())
 const effectPool = [];
-let effectIndex = 0; // rotation pointer: 0→1→2→3→4→0→…
+let effectIndex = 0;
 
 for (let i = 0; i < EFFECT_POOL_SIZE; i++) {
   const mat  = new THREE.SpriteMaterial({
     map: jakeTexture,
     transparent: true,
     opacity: 0,
-    depthWrite: false,   // sprites don't corrupt the depth buffer
+    depthWrite: false,
   });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(0, 0, 1);   // invisible at rest
+  sprite.scale.set(0, 0, 1);
   sprite.visible = false;
-  scene.add(sprite);            // world-space — never inside a Group
+  scene.add(sprite);
 
   effectPool.push({ sprite, material: mat, active: false, progress: 0, baseY: 0 });
 }
 
-// ─── 3. Acquire the next slot from the pool (rotation system) ─────────────────
-// If the chosen slot is still mid-animation we forcibly reset it first so it is
-// always available. This prevents starvation on very fast hit chains.
 function acquireEffect() {
   const slot = effectPool[effectIndex];
-  // Force-return any in-flight animation so the slot is clean
   if (slot.active) returnEffect(slot);
   effectIndex = (effectIndex + 1) % EFFECT_POOL_SIZE;
   return slot;
 }
 
-// ─── 4. Return a slot to the pool ────────────────────────────────────────────
 function returnEffect(slot) {
   slot.active   = false;
   slot.progress = 0;
@@ -268,35 +248,22 @@ function returnEffect(slot) {
   slot.sprite.scale.set(0, 0, 1);
 }
 
-// ─── 5. Trigger: called exactly once per cube hit ─────────────────────────────
-// cube        → the THREE.Mesh (child of a THREE.Group obstacle)
-// Requirement §7 §8: use getWorldPosition + position.copy for exact placement.
 function triggerCubeEffect(cube) {
-  // § 5: hide the cube by making its material transparent
   cube.material.transparent = true;
   cube.material.opacity = 0;
-
-  // § 7+8: resolve world coordinates — works regardless of Group nesting depth
-  cube.getWorldPosition(worldPos);          // writes into the shared scratch vec
-
-  const slot = acquireEffect();             // rotation system picks next slot
-  slot.sprite.position.copy(worldPos);      // exact world position
-  slot.sprite.position.y += 0.25;          // baseline offset at cube centre
-  slot.baseY = slot.sprite.position.y;     // store so animator can float upward
-  slot.sprite.scale.set(0.1, 0.133, 1);    // start tiny (scale-in); aspect = 624/832 ≈ 0.75
+  cube.getWorldPosition(worldPos);
+  const slot = acquireEffect();
+  slot.sprite.position.copy(worldPos);
+  slot.sprite.position.y += 0.25;
+  slot.baseY = slot.sprite.position.y;
+  slot.sprite.scale.set(0.1, 0.133, 1);
   slot.material.opacity = 1;
   slot.sprite.visible = true;
   slot.active   = true;
-  slot.progress = 0;                        // restart the 0→1 animation clock
+  slot.progress = 0;
 }
 
-// ─── 6. Per-frame animator — call once inside update() ───────────────────────
-// No allocations: all math is on primitives or the pre-allocated worldPos vec.
-// Animation phases (progress 0→1, ~40 frames at 60 fps):
-//   0.00–0.40  scale up  (ease-out)
-//   0.00–0.70  rotate    (continuous spin)
-//   0.55–1.00  fade out  (linear)
-const EFFECT_DURATION = 0.65;  // seconds (progress increments by deltaT / duration)
+const EFFECT_DURATION = 0.65;
 
 function updateEffects(deltaT) {
   for (let i = 0; i < EFFECT_POOL_SIZE; i++) {
@@ -310,25 +277,18 @@ function updateEffects(deltaT) {
       continue;
     }
 
-    const t = slot.progress; // 0→1
+    const t = slot.progress;
 
-    // Scale: ease-out pop. Jake PNG is 624×832 → aspect ratio W/H = 0.75
-    // Peak: 2.4 wide × 3.2 tall world units — clearly visible, not giant
     let s;
     if (t < 0.4) {
-      s = 2.4 * (t / 0.4);                  // ramp up
+      s = 2.4 * (t / 0.4);
     } else {
-      s = 2.4 - 0.5 * ((t - 0.4) / 0.6);   // gentle settle to 1.9
+      s = 2.4 - 0.5 * ((t - 0.4) / 0.6);
     }
-    slot.sprite.scale.set(s * 0.75, s, 1); // maintain 624:832 portrait aspect
+    slot.sprite.scale.set(s * 0.75, s, 1);
 
-    // No spin — character sprite should stay upright
     slot.material.rotation = 0;
-
-    // Float upward: rise 1.5 world units over the full animation
     slot.sprite.position.y = slot.baseY + t * 1.5;
-
-    // Fade: hold opaque until 40%, then linear fade to 0
     slot.material.opacity = t < 0.40 ? 1 : 1 - (t - 0.40) / 0.60;
   }
 }
@@ -337,21 +297,12 @@ function updateEffects(deltaT) {
 const playerGroup = new THREE.Group();
 const playerMesh = new THREE.Mesh(sharedGeos.player, sharedMats.player);
 playerMesh.castShadow = true;
-playerMesh.visible = false; // ← green cube hidden; Jake sprite takes its place
+playerMesh.visible = false;
 playerGroup.add(playerMesh);
-
-const shieldRing = new THREE.Mesh(sharedGeos.shieldRing, sharedMats.shield);
-shieldRing.rotation.x = Math.PI/2;
-shieldRing.visible = false;
-playerGroup.add(shieldRing);
 playerGroup.position.set(0, 0.75, 0);
 scene.add(playerGroup);
 
-// ── Jake player sprite: replaces the hidden green cube ───────────────────────
-// ONE sprite, lives for the entire session, never pooled, never destroyed.
-// Sized to match the player hitbox (0.7 wide × 1.5 tall). The PNG is 624×832
-// so aspect = 0.75 → scaleX = 0.75 * scaleY.
-// scaleY = 1.5 (matches player height), scaleX = 1.5 * 0.75 = 1.125
+// Jake player sprite
 const jakePlayerSprite = new THREE.Sprite(
   new THREE.SpriteMaterial({
     map: jakeTexture,
@@ -361,12 +312,11 @@ const jakePlayerSprite = new THREE.Sprite(
   })
 );
 jakePlayerSprite.scale.set(4.5, 6.0, 1);
-jakePlayerSprite.center.set(0.5, 0.0); // anchor at bottom — sprite grows upward from feet
-jakePlayerSprite.visible = false; // shown only while game is running
-scene.add(jakePlayerSprite);      // world-space — not inside playerGroup
-// ─────────────────────────────────────────────────────────────────────────────
+jakePlayerSprite.center.set(0.5, 0.0);
+jakePlayerSprite.visible = false;
+scene.add(jakePlayerSprite);
 
-// Simplified particles for performance
+// Simplified particles
 const particleGroup = new THREE.Group();
 scene.add(particleGroup);
 const MAX_PARTICLES = 150;
@@ -497,17 +447,6 @@ function createTable(lane,z){
   scene.add(group); return group;
 }
 
-function createCubeBarrier(lane,z){
-  const group=new THREE.Group();
-  const positions=[[0,0.35,0],[0.4,0.35,0.3],[-0.4,0.35,-0.3],[0,1.05,0],[0.3,1.05,0.2],[-0.3,1.05,-0.2]];
-  positions.forEach(([px,py,pz])=>{
-    const c=new THREE.Mesh(sharedGeos.cubeBlock, sharedMats.cubeBarrier);
-    c.position.set(px,py,pz); c.castShadow=true; group.add(c);
-  });
-  group.position.set(LANES[lane],0,z);
-  group.userData={type:'cubeBarrier', height:1.3};
-  scene.add(group); return group;
-}
 
 function createCoin(lane,z,height=1.3){
   const group=new THREE.Group();
@@ -550,8 +489,7 @@ function createDiamond(lane,z,height=1.6){
 function createPowerup(lane,z,ptype){
   const group=new THREE.Group();
   let mat, geo;
-  if(ptype==='shield'){mat=sharedMats.shield; geo=new THREE.OctahedronGeometry(0.5);}
-  else if(ptype==='magnet'){mat=sharedMats.magnet; geo=new THREE.BoxGeometry(0.5,0.7,0.3);}
+  if(ptype==='magnet'){mat=sharedMats.magnet; geo=new THREE.BoxGeometry(0.5,0.7,0.3);}
   else{mat=sharedMats.x2; geo=new THREE.BoxGeometry(0.55,0.55,0.55);}
   const mesh=new THREE.Mesh(geo,mat); mesh.castShadow=true; group.add(mesh);
   const ring=new THREE.Mesh(sharedGeos.powerupRing, mat);
@@ -587,7 +525,6 @@ let currentLane=1, targetLane=1;
 let playerY=0, velocityY=0, jumping=false, sliding=false, slideTimer=0;
 let currentSpeed=BASE_SPEED;
 let spawnTimer=0, coinSpawnTimer=0, starSpawnTimer=0, diamondSpawnTimer=0, powerupTimer=0;
-let shieldActive=false, shieldTimer=0;
 let magnetActive=false, magnetTimer=0;
 let x2Active=false, x2Timer=0;
 let distanceTravelled=0, skyPhase=0, cameraShake=0;
@@ -630,17 +567,12 @@ function startGame(){
   playerY=0; velocityY=0; jumping=false; sliding=false; slideTimer=0;
   currentSpeed=BASE_SPEED; speedLevel=1;
   spawnTimer=0.5; coinSpawnTimer=0.2; starSpawnTimer=1; diamondSpawnTimer=1.8; powerupTimer=4;
-  shieldActive=false; magnetActive=false; x2Active=false;
+  magnetActive=false; x2Active=false;
   distanceTravelled=0; skyPhase=0;
 
-  shieldRing.visible=false;
-  jakePlayerSprite.visible = true;  // show Jake when game starts
-  // ── CUBE-TO-IMAGE EFFECT: flush all slots on restart ──
-  // Without this, a slot mid-animation from the previous game would remain
-  // visible at its last world position during the new game's first frames.
+  jakePlayerSprite.visible = true;
   for (let i = 0; i < EFFECT_POOL_SIZE; i++) returnEffect(effectPool[i]);
   effectIndex = 0;
-  // ───────────────────────────────────────────────────────
   playerGroup.position.set(LANES[1],0.75,0);
   playerGroup.scale.set(1,1,1);
 
@@ -660,7 +592,7 @@ function startGame(){
 
 function endGame(){
   running=false; gameOver=true;
-  jakePlayerSprite.visible = false; // hide Jake on game over
+  jakePlayerSprite.visible = false;
   cameraShake=0.5;
   flashScreen('#ff0000',0.6);
   const isNew=score>highScore;
@@ -707,25 +639,21 @@ function resetCombo(){
 
 function activatePowerup(ptype){
   const el=document.getElementById('powerupDisplay');
-  if(ptype==='shield'){shieldActive=true;shieldTimer=8;shieldRing.visible=true;el.style.color='#00ccff';el.textContent='🛡 SHIELD';flashScreen('#00ccff',0.25);}
-  else if(ptype==='magnet'){magnetActive=true;magnetTimer=8;el.style.color='#ff44ff';el.textContent='🧲 MAGNET';flashScreen('#ff44ff',0.2);}
+  if(ptype==='magnet'){magnetActive=true;magnetTimer=8;el.style.color='#ff44ff';el.textContent='🧲 MAGNET';flashScreen('#ff44ff',0.2);}
   else{x2Active=true;x2Timer=8;el.style.color='#00ff88';el.textContent='×2 SCORE';flashScreen('#00ff88',0.2);}
   el.style.opacity='1';
   setTimeout(()=>{el.style.opacity='0';},2000);
 }
 
-const obstacleCreators = [createBarrier,createTallBarrier,createCar,createBus,createTable,createCubeBarrier];
-
 function spawnObstacle(){
   const z=camera.position.z-42;
   const r=Math.random();
   let creator;
-  if(r<0.2) creator=createBarrier;
-  else if(r<0.35) creator=createTallBarrier;
-  else if(r<0.5) creator=createCar;
-  else if(r<0.65) creator=createBus;
-  else if(r<0.8) creator=createTable;
-  else creator=createCubeBarrier;
+  if(r<0.25) creator=createBarrier;
+  else if(r<0.45) creator=createTallBarrier;
+  else if(r<0.65) creator=createCar;
+  else if(r<0.82) creator=createBus;
+  else creator=createTable;
   const lane=Math.floor(Math.random()*3);
   obstacles.push(creator(lane,z));
   if(Math.random()<0.3+speedLevel*0.02){
@@ -753,8 +681,8 @@ function spawnDiamondItem(){
   diamonds.push(createDiamond(Math.floor(Math.random()*3),camera.position.z-39,1.5+Math.random()*0.4));
 }
 function spawnPowerupItem(){
-  const types=['shield','magnet','x2'];
-  powerups.push(createPowerup(Math.floor(Math.random()*3),camera.position.z-40,types[Math.floor(Math.random()*3)]));
+  const types=['magnet','x2'];
+  powerups.push(createPowerup(Math.floor(Math.random()*3),camera.position.z-40,types[Math.floor(Math.random()*2)]));
 }
 
 function updateLaneDots(){
@@ -781,11 +709,10 @@ function attractCollectible(item){
 function update(){
   if(!running) return;
 
-  // Progressive speed increase
   distanceTravelled += currentSpeed;
   currentSpeed = Math.min(MAX_SPEED, BASE_SPEED + distanceTravelled * SPEED_INCREMENT);
   speedLevel = Math.floor((currentSpeed - BASE_SPEED) / 0.05) + 1;
-  
+
   document.getElementById('speedDisplay').textContent = `SPEED: ${speedLevel}x`;
   document.getElementById('speedBar').style.width = Math.min(100, ((currentSpeed-BASE_SPEED)/(MAX_SPEED-BASE_SPEED))*100)+'%';
 
@@ -821,24 +748,14 @@ function update(){
     playerGroup.position.y = 0.75 + playerY;
   }
 
-  // ── Sync Jake sprite to player position every frame ──────────────────────
+  // Sync Jake sprite to player position
   playerGroup.getWorldPosition(worldPos);
   jakePlayerSprite.position.copy(worldPos);
-  // With bottom-anchor (center.y=0), position.y = base of sprite.
-  // playerGroup.position.y already includes playerY (jump offset) and slide offset.
-  // We subtract the resting offset (0.75) so feet sit on the ground at rest,
-  // but still rise with playerY when jumping.
   jakePlayerSprite.position.y = playerGroup.position.y - 0.75;
-  // Move Jake closer to camera (same Z as player, which is 0 in world space)
-  // Camera is at Z=8.5 looking at Z=-3. Player is at Z=0. 
-  // Push Jake toward camera slightly so it doesn't look distant.
   jakePlayerSprite.position.z = worldPos.z + 1.5;
-  // Slide squish: compress sprite vertically when sliding
   jakePlayerSprite.scale.set(4.5, sliding ? 2.1 : 6.0, 1);
-  // ─────────────────────────────────────────────────────────────────────────
 
   if(comboTimer>0){comboTimer-=0.016;if(comboTimer<=0)resetCombo();}
-  if(shieldActive){shieldTimer-=0.016;if(shieldTimer<=0){shieldActive=false;shieldRing.visible=false;}}
   if(magnetActive){magnetTimer-=0.016;if(magnetTimer<=0)magnetActive=false;}
   if(x2Active){x2Timer-=0.016;if(x2Timer<=0)x2Active=false;}
 
@@ -855,22 +772,8 @@ function update(){
       const pbot=playerGroup.position.y-(sliding?0.15:0.75);
       if(type==='car'||type==='bus'){if(pbot<h+0.1&&dx<1.2)hit=true;}
       else if(type==='barrier'||type==='table'){if(pbot<h+0.1&&dx<1.1)hit=true;}
-      else if(type==='tall'||type==='cubeBarrier'){if(!sliding&&ptop<h+0.2&&dx<1.1)hit=true;}
+      else if(type==='tall'){if(!sliding&&ptop<h+0.2&&dx<1.1)hit=true;}
       if(hit){
-        if(shieldActive){
-          shieldActive=false;shieldTimer=0;shieldRing.visible=false;
-          spawnParticles(playerGroup.position.x,playerGroup.position.y,playerGroup.position.z,0,0.8,1,15);
-          flashScreen('#00ccff',0.5);
-          // ── CUBE-TO-IMAGE EFFECT: shield deflects the obstacle ──────────────
-          // Iterate the obstacle group's children and trigger the effect on every
-          // visible cube mesh. The group is a THREE.Group (parent), so we MUST use
-          // getWorldPosition (done inside triggerCubeEffect) to get world coords.
-          o.traverse(child => {
-            if (child.isMesh) triggerCubeEffect(child);
-          });
-          // ────────────────────────────────────────────────────────────────────
-          scene.remove(o);obstacles.splice(i,1);continue;
-        }
         spawnParticles(playerGroup.position.x,playerGroup.position.y,playerGroup.position.z,1,0.2,0.2,25);
         endGame();return;
       }
@@ -916,12 +819,8 @@ function update(){
   buildings.forEach(b=>{b.position.z+=currentSpeed;if(b.position.z>12)b.position.z-=GROUND_LENGTH+8;});
 
   updateParticles();
-  // ── CUBE-TO-IMAGE EFFECT: animate all active slots ──
-  // 0.016 ≈ 1/60 s fixed delta. Compatible with the existing timer pattern used
-  // throughout this codebase (comboTimer, shieldTimer, etc. all use 0.016).
   updateEffects(0.016);
 
-  // Dynamic spawn rates based on speed
   const speedFactor = currentSpeed / BASE_SPEED;
   spawnTimer -= 0.016 * speedFactor;
   if(spawnTimer<=0){spawnTimer=1.6+Math.random()*1;spawnObstacle();}
