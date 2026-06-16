@@ -1,66 +1,76 @@
-2<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no,maximum-scale=1.0">
-<title>CUBE RUSH</title>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow:hidden;background:#0a0a1a;font-family:'Rajdhani',sans-serif;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none}
-#gameContainer{width:100%;height:100%;position:relative}
-canvas{display:block}
-
-#hud{position:absolute;top:0;left:0;width:100%;pointer-events:none;z-index:10;padding:12px 16px;}
-#topRow{display:flex;justify-content:space-between;align-items:flex-start;}
-#scoreBox{text-align:center;}
-#scoreLabel{color:rgba(255,255,255,0.5);font-size:11px;letter-spacing:3px;text-transform:uppercase;}
-#scoreDisplay{color:#fff;font-size:52px;font-family:'Bebas Neue',sans-serif;line-height:1;text-shadow:0 0 30px rgba(0,220,255,0.8),0 0 60px rgba(0,220,255,0.4);}
-#bestBox{text-align:right;}
-#bestLabel{color:rgba(255,255,255,0.5);font-size:11px;letter-spacing:3px;}
-#bestDisplay{color:#ffd700;font-size:24px;font-family:'Bebas Neue',sans-serif;text-shadow:0 0 20px rgba(255,215,0,0.6);}
-#collectibleBox{text-align:left;}
-#collectibleDisplay{color:#ffd700;font-size:16px;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;line-height:1.3;}
-
-#comboDisplay{position:absolute;top:105px;left:50%;transform:translateX(-50%);color:#ff6bff;font-size:28px;font-family:'Bebas Neue',sans-serif;letter-spacing:2px;pointer-events:none;z-index:10;opacity:0;transition:opacity 0.3s;text-shadow:0 0 20px rgba(255,107,255,0.8);}
-#multiplierDisplay{position:absolute;top:140px;left:50%;transform:translateX(-50%);color:#00ffaa;font-size:18px;font-family:'Bebas Neue',sans-serif;pointer-events:none;z-index:10;opacity:0;transition:opacity 0.3s;}
-#speedDisplay{position:absolute;top:170px;left:50%;transform:translateX(-50%);color:#ff9500;font-size:14px;font-family:'Bebas Neue',sans-serif;letter-spacing:2px;pointer-events:none;z-index:10;opacity:0.7;}
-
-#speedBarWrap{position:absolute;bottom:0;left:0;width:100%;height:5px;background:rgba(255,255,255,0.08);pointer-events:none;z-index:10;}
-#speedBar{height:100%;width:0%;background:linear-gradient(90deg,#00ffaa,#00ccff,#ff6bff,#ff4444);transition:width 0.3s;border-radius:0 3px 3px 0;}
-
-#powerupDisplay{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);font-size:36px;font-family:'Bebas Neue',sans-serif;letter-spacing:3px;pointer-events:none;z-index:10;opacity:0;}
-
-#laneGuide{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);display:flex;gap:14px;pointer-events:none;z-index:10;}
-.laneDot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.2);transition:background 0.15s, transform 0.15s;}
-.laneDot.active{background:#00ccff;transform:scale(1.6);box-shadow:0 0 10px #00ccff;}
-
-#startScreen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:30;background:linear-gradient(180deg,rgba(10,10,26,0.95) 0%,rgba(10,10,26,0.7) 100%);}
-#startScreen h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(56px,12vw,100px);color:#fff;letter-spacing:6px;text-shadow:0 0 40px rgba(0,220,255,1),0 0 80px rgba(0,220,255,0.5);margin-bottom:4px;}
-#startScreen .subtitle{color:rgba(255,255,255,0.5);font-size:14px;letter-spacing:6px;margin-bottom:40px;}
-#startScreen .tip{color:rgba(255,255,255,0.3);font-size:12px;letter-spacing:2px;margin-top:8px;line-height:1.6;}
-.startBtn{background:linear-gradient(135deg,#00ccff,#ff6bff);border:none;color:#fff;padding:14px 48px;border-radius:50px;font-size:20px;font-family:'Bebas Neue',sans-serif;letter-spacing:3px;cursor:pointer;pointer-events:all;box-shadow:0 0 30px rgba(0,204,255,0.5);transition:transform 0.1s, box-shadow 0.1s;}
-.startBtn:active{transform:scale(0.96);box-shadow:0 0 10px rgba(0,204,255,0.3);}
-.highScoreRow{color:rgba(255,255,255,0.4);font-size:14px;letter-spacing:2px;margin-bottom:24px;}
-.highScoreRow span{color:#ffd700;font-family:'Bebas Neue',sans-serif;font-size:20px;}
-
-#gameOverPanel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:linear-gradient(160deg,rgba(0,10,30,0.97),rgba(20,0,40,0.97));border:1px solid rgba(255,255,255,0.1);border-radius:24px;padding:32px 28px;text-align:center;color:#fff;display:none;z-index:40;min-width:290px;box-shadow:0 0 60px rgba(0,100,255,0.3);}
-#gameOverPanel.show{display:block;}
-#gameOverPanel h2{font-family:'Bebas Neue',sans-serif;font-size:42px;color:#ff4444;margin-bottom:4px;text-shadow:0 0 20px rgba(255,68,68,0.6);}
-#newBestBadge{display:none;background:linear-gradient(135deg,#ffd700,#ff9500);color:#000;font-size:11px;font-weight:700;letter-spacing:2px;padding:3px 12px;border-radius:20px;margin:0 auto 10px;width:fit-content;}
-.statRow{display:flex;justify-content:space-between;gap:10px;margin:14px 0;flex-wrap:wrap;}
-.stat{flex:1;min-width:55px;}
-.statVal{font-family:'Bebas Neue',sans-serif;font-size:28px;color:#fff;}
-.statLabel{font-size:9px;letter-spacing:2px;color:rgba(255,255,255,0.4);margin-top:-4px;}
-.statVal.gold{color:#ffd700;text-shadow:0 0 15px rgba(255,215,0,0.5);}
-.divider{height:1px;background:rgba(255,255,255,0.08);margin:10px 0;}
-#restartBtn{background:linear-gradient(135deg,#00ccff,#ff6bff);border:none;color:#fff;padding:12px 36px;border-radius:50px;font-size:18px;font-family:'Bebas Neue',sans-serif;letter-spacing:2px;cursor:pointer;pointer-events:all;width:100%;margin-top:14px;box-shadow:0 0 20px rgba(0,204,255,0.4);}
-#restartBtn:active{opacity:0.85;}
-
-.floatText{position:absolute;pointer-events:none;font-family:'Bebas Neue',sans-serif;font-size:24px;font-weight:700;color:#ffd700;text-shadow:0 0 10px rgba(255,215,0,0.8);z-index:15;animation:floatUp 0.9s forwards;}
-@keyframes floatUp{0%{opacity:1;transform:translateY(0) scale(1);}100%{opacity:0;transform:translateY(-60px) scale(0.7);}}
-#flash{position:absolute;inset:0;pointer-events:none;z-index:25;opacity:0;}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no,maximum-scale=1.0">
+  <title>CUBE RUSH ✦ IMPORT & RESIZE</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    html,body{width:100%;height:100%;overflow:hidden;background:#0a0a1a;font-family:'Rajdhani',sans-serif;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none}
+    #gameContainer{width:100%;height:100%;position:relative}
+    canvas{display:block}
+    #hud{position:absolute;top:0;left:0;width:100%;pointer-events:none;z-index:10;padding:12px 16px}
+    #topRow{display:flex;justify-content:space-between;align-items:flex-start}
+    #scoreBox{text-align:center}
+    #scoreLabel{color:rgba(255,255,255,0.5);font-size:11px;letter-spacing:3px;text-transform:uppercase}
+    #scoreDisplay{color:#fff;font-size:52px;font-family:'Bebas Neue',sans-serif;line-height:1;text-shadow:0 0 30px rgba(0,220,255,0.8),0 0 60px rgba(0,220,255,0.4)}
+    #bestBox{text-align:right}
+    #bestLabel{color:rgba(255,255,255,0.5);font-size:11px;letter-spacing:3px}
+    #bestDisplay{color:#ffd700;font-size:24px;font-family:'Bebas Neue',sans-serif;text-shadow:0 0 20px rgba(255,215,0,0.6)}
+    #collectibleBox{text-align:left}
+    #collectibleDisplay{color:#ffd700;font-size:16px;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;line-height:1.3}
+    #comboDisplay{position:absolute;top:105px;left:50%;transform:translateX(-50%);color:#ff6bff;font-size:28px;font-family:'Bebas Neue',sans-serif;letter-spacing:2px;pointer-events:none;z-index:10;opacity:0;transition:opacity 0.3s;text-shadow:0 0 20px rgba(255,107,255,0.8)}
+    #multiplierDisplay{position:absolute;top:140px;left:50%;transform:translateX(-50%);color:#00ffaa;font-size:18px;font-family:'Bebas Neue',sans-serif;pointer-events:none;z-index:10;opacity:0;transition:opacity 0.3s}
+    #speedDisplay{position:absolute;top:170px;left:50%;transform:translateX(-50%);color:#ff9500;font-size:14px;font-family:'Bebas Neue',sans-serif;letter-spacing:2px;pointer-events:none;z-index:10;opacity:0.7}
+    #speedBarWrap{position:absolute;bottom:0;left:0;width:100%;height:5px;background:rgba(255,255,255,0.08);pointer-events:none;z-index:10}
+    #speedBar{height:100%;width:0%;background:linear-gradient(90deg,#00ffaa,#00ccff,#ff6bff,#ff4444);transition:width 0.3s;border-radius:0 3px 3px 0}
+    #powerupDisplay{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);font-size:36px;font-family:'Bebas Neue',sans-serif;letter-spacing:3px;pointer-events:none;z-index:10;opacity:0}
+    #laneGuide{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);display:flex;gap:14px;pointer-events:none;z-index:10}
+    .laneDot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.2);transition:background 0.15s,transform 0.15s}
+    .laneDot.active{background:#00ccff;transform:scale(1.6);box-shadow:0 0 10px #00ccff}
+    #startScreen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:30;background:linear-gradient(180deg,rgba(10,10,26,0.95) 0%,rgba(10,10,26,0.7) 100%)}
+    #startScreen h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(56px,12vw,100px);color:#fff;letter-spacing:6px;text-shadow:0 0 40px rgba(0,220,255,1),0 0 80px rgba(0,220,255,0.5);margin-bottom:4px}
+    #startScreen .subtitle{color:rgba(255,255,255,0.5);font-size:14px;letter-spacing:6px;margin-bottom:40px}
+    #startScreen .tip{color:rgba(255,255,255,0.3);font-size:12px;letter-spacing:2px;margin-top:8px;line-height:1.6}
+    .startBtn{background:linear-gradient(135deg,#00ccff,#ff6bff);border:none;color:#fff;padding:14px 48px;border-radius:50px;font-size:20px;font-family:'Bebas Neue',sans-serif;letter-spacing:3px;cursor:pointer;pointer-events:all;box-shadow:0 0 30px rgba(0,204,255,0.5);transition:transform 0.1s,box-shadow 0.1s}
+    .startBtn:active{transform:scale(0.96);box-shadow:0 0 10px rgba(0,204,255,0.3)}
+    .highScoreRow{color:rgba(255,255,255,0.4);font-size:14px;letter-spacing:2px;margin-bottom:24px}
+    .highScoreRow span{color:#ffd700;font-family:'Bebas Neue',sans-serif;font-size:20px}
+    #gameOverPanel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:linear-gradient(160deg,rgba(0,10,30,0.97),rgba(20,0,40,0.97));border:1px solid rgba(255,255,255,0.1);border-radius:24px;padding:32px 28px;text-align:center;color:#fff;display:none;z-index:40;min-width:290px;box-shadow:0 0 60px rgba(0,100,255,0.3)}
+    #gameOverPanel.show{display:block}
+    #gameOverPanel h2{font-family:'Bebas Neue',sans-serif;font-size:42px;color:#ff4444;margin-bottom:4px;text-shadow:0 0 20px rgba(255,68,68,0.6)}
+    #newBestBadge{display:none;background:linear-gradient(135deg,#ffd700,#ff9500);color:#000;font-size:11px;font-weight:700;letter-spacing:2px;padding:3px 12px;border-radius:20px;margin:0 auto 10px;width:fit-content}
+    .statRow{display:flex;justify-content:space-between;gap:10px;margin:14px 0;flex-wrap:wrap}
+    .stat{flex:1;min-width:55px}
+    .statVal{font-family:'Bebas Neue',sans-serif;font-size:28px;color:#fff}
+    .statLabel{font-size:9px;letter-spacing:2px;color:rgba(255,255,255,0.4);margin-top:-4px}
+    .statVal.gold{color:#ffd700;text-shadow:0 0 15px rgba(255,215,0,0.5)}
+    .divider{height:1px;background:rgba(255,255,255,0.08);margin:10px 0}
+    #restartBtn{background:linear-gradient(135deg,#00ccff,#ff6bff);border:none;color:#fff;padding:12px 36px;border-radius:50px;font-size:18px;font-family:'Bebas Neue',sans-serif;letter-spacing:2px;cursor:pointer;pointer-events:all;width:100%;margin-top:14px;box-shadow:0 0 20px rgba(0,204,255,0.4)}
+    #restartBtn:active{opacity:0.85}
+    .floatText{position:absolute;pointer-events:none;font-family:'Bebas Neue',sans-serif;font-size:24px;font-weight:700;color:#ffd700;text-shadow:0 0 10px rgba(255,215,0,0.8);z-index:15;animation:floatUp 0.9s forwards}
+    @keyframes floatUp{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-60px) scale(0.7)}}
+    #flash{position:absolute;inset:0;pointer-events:none;z-index:25;opacity:0}
+    #frameImport{display:flex;flex-direction:column;align-items:center;gap:9px;margin:6px 0 28px;pointer-events:auto}
+    .importTitle{color:rgba(255,255,255,0.55);font-size:11px;letter-spacing:3px;font-family:'Rajdhani',sans-serif;font-weight:700}
+    .importHint{color:rgba(255,255,255,0.32);font-size:10px;letter-spacing:1px;text-align:center;line-height:1.5}
+    .framePreviews{display:flex;gap:12px}
+    .frameSlot{width:46px;height:62px;border:1px dashed rgba(255,255,255,0.22);border-radius:9px;background-color:rgba(255,255,255,0.04);background-size:contain;background-position:center;background-repeat:no-repeat;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;transition:border-color .2s,box-shadow .2s,transform .1s}
+    .frameSlot span{color:rgba(255,255,255,0.35);font-family:'Bebas Neue',sans-serif;font-size:20px}
+    .frameSlot:hover{border-color:rgba(0,204,255,0.6)}
+    .frameSlot.loaded{border:1px solid #00ccff;box-shadow:0 0 12px rgba(0,204,255,0.45)}
+    .frameSlot.loaded span{display:none}
+    .frameSlot:active{transform:scale(0.94)}
+    .importStatus{font-size:10px;letter-spacing:1px;color:#00ffaa;height:14px;font-family:'Rajdhani',sans-serif;font-weight:600;opacity:0;transition:opacity .2s}
+    .importBtn{background:rgba(0,204,255,0.1);border:1px solid rgba(0,204,255,0.5);color:#00ccff;padding:9px 22px;border-radius:30px;font-size:13px;font-family:'Bebas Neue',sans-serif;letter-spacing:2px;cursor:pointer;pointer-events:auto;transition:all .15s}
+    .importBtn:active{transform:scale(0.96);background:rgba(0,204,255,0.22)}
+    .resizeRow{display:flex;align-items:center;gap:10px;margin-top:4px}
+    .resizeLabel{color:rgba(255,255,255,0.45);font-size:10px;letter-spacing:2px}
+    .resizeSlider{-webkit-appearance:none;width:100px;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;outline:none}
+    .resizeSlider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:#00ccff;border-radius:50%;cursor:pointer;box-shadow:0 0 8px #00ccff}
+    .resizeVal{color:#00ccff;font-size:11px;font-family:'Bebas Neue',sans-serif;min-width:36px}
+  </style>
 </head>
 <body>
 <div id="gameContainer">
@@ -83,8 +93,26 @@ canvas{display:block}
     <h1>CUBE<br>RUSH</h1>
     <div class="subtitle">ENDLESS RUNNER</div>
     <div class="highScoreRow">BEST: <span id="hsDisplay">0</span></div>
+    <div id="frameImport">
+      <div class="importTitle">CHARACTER FRAMES</div>
+      <div class="importHint">Load 3 images — they loop as a running animation</div>
+      <div class="framePreviews">
+        <div class="frameSlot" id="frameSlot0" data-slot="0"><span>1</span></div>
+        <div class="frameSlot" id="frameSlot1" data-slot="1"><span>2</span></div>
+        <div class="frameSlot" id="frameSlot2" data-slot="2"><span>3</span></div>
+      </div>
+      <div id="importStatus" class="importStatus"></div>
+      <input type="file" id="frameFileInput" accept="image/*" multiple hidden>
+      <input type="file" id="singleFrameInput" accept="image/*" hidden>
+      <button class="importBtn" id="importBtn" type="button">📁 LOAD ALL 3 FRAMES</button>
+      <div class="resizeRow">
+        <span class="resizeLabel">SIZE</span>
+        <input type="range" class="resizeSlider" id="sizeSlider" min="0.5" max="3.5" value="1.5" step="0.1">
+        <span class="resizeVal" id="sizeValue">1.5x</span>
+      </div>
+    </div>
     <button class="startBtn" id="mainStartBtn">▶ PLAY</button>
-    <div class="tip">← → SWIPE LANE &nbsp;|&nbsp; ↑ JUMP &nbsp;|&nbsp; ↓ SLIDE<br>🚗 🚌 🪑 📦</div>
+    <div class="tip">← → SWIPE LANE &nbsp;|&nbsp; ↑ JUMP &nbsp;|&nbsp; ↓ SLIDE</div>
   </div>
 
   <div id="gameOverPanel">
@@ -105,7 +133,7 @@ canvas{display:block}
 </div>
 
 <script type="importmap">
-{"imports":{"three":"https://unpkg.com/three@0.157.0/build/three.module.js"}}
+  {"imports":{"three":"https://unpkg.com/three@0.157.0/build/three.module.js"}}
 </script>
 <script type="module">
 import * as THREE from 'three';
@@ -118,6 +146,11 @@ const GROUND_LENGTH = 100;
 const TILE_SIZE = 4;
 const GRAVITY = 0.035;
 const JUMP_VEL = 0.48;
+
+// INCREASED PLAYER SIZE - bigger hitbox for better visibility
+const PLAYER_WIDTH = 1.4;   // was 0.7
+const PLAYER_HEIGHT = 2.8;  // was 1.5
+const PLAYER_DEPTH = 1.2;   // was 0.7
 
 const container = document.getElementById('gameContainer');
 const scene = new THREE.Scene();
@@ -132,9 +165,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 container.appendChild(renderer.domElement);
 
-// ─── Shared scratch vector (never allocate inside game loop) ───
 const worldPos = new THREE.Vector3();
-
 let skyHue = 0.6;
 function updateSky() {
   const col = new THREE.Color().setHSL(skyHue, 0.6, 0.08);
@@ -156,9 +187,8 @@ const rimLight = new THREE.DirectionalLight(0x4488ff, 0.8);
 rimLight.position.set(-5, 3, -10);
 scene.add(rimLight);
 
-// Shared geometries for performance
 const sharedGeos = {
-  player: new THREE.BoxGeometry(0.7,1.5,0.7),
+  player: new THREE.BoxGeometry(PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_DEPTH),
   groundTile: new THREE.BoxGeometry(7,0.3,TILE_SIZE),
   trackLane: new THREE.BoxGeometry(0.14,0.04,TILE_SIZE),
   wall: new THREE.BoxGeometry(0.3,2,TILE_SIZE),
@@ -172,15 +202,15 @@ const sharedGeos = {
   busStripe: new THREE.BoxGeometry(2.05,0.1,2.85),
   tableTop: new THREE.BoxGeometry(1.3,0.1,1.3),
   tableLeg: new THREE.BoxGeometry(0.1,0.6,0.1),
+  cubeBlock: new THREE.BoxGeometry(0.5,0.5,0.5),
   coinCylinder: new THREE.CylinderGeometry(0.35,0.35,0.15,12),
   diamond: new THREE.OctahedronGeometry(0.4,0),
   diamondRing: new THREE.TorusGeometry(0.45,0.04,4,12),
   powerupRing: new THREE.TorusGeometry(0.65,0.05,6,12),
-  building: null,
   buildingWindow: new THREE.BoxGeometry(0.35,0.4,0.05),
+  shieldRing: new THREE.TorusGeometry(1.2,0.07,8,16), // bigger shield for bigger player
 };
 
-// Shared materials for performance
 const sharedMats = {
   player: new THREE.MeshLambertMaterial({color:0x00ffcc}),
   barrier: new THREE.MeshLambertMaterial({color:0xff3333}),
@@ -192,9 +222,11 @@ const sharedMats = {
   busStripe: new THREE.MeshLambertMaterial({color:0xffcc00}),
   table: new THREE.MeshLambertMaterial({color:0x8B4513}),
   tableLeg: new THREE.MeshLambertMaterial({color:0x654321}),
+  cubeBarrier: new THREE.MeshLambertMaterial({color:0x6666ff}),
   coin: new THREE.MeshLambertMaterial({color:0xffd700}),
   star: new THREE.MeshLambertMaterial({color:0xffff00}),
   diamond: new THREE.MeshLambertMaterial({color:0x00ffff}),
+  shield: new THREE.MeshLambertMaterial({color:0x00ccff, transparent:true, opacity:0.7}),
   magnet: new THREE.MeshLambertMaterial({color:0xff44ff}),
   x2: new THREE.MeshLambertMaterial({color:0x00ff88}),
   ground: new THREE.MeshLambertMaterial({color:0x2a2a3a}),
@@ -204,37 +236,53 @@ const sharedMats = {
   window: new THREE.MeshLambertMaterial({color:0xffee88}),
 };
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// CUBE-TO-IMAGE EFFECT SYSTEM
-// ═══════════════════════════════════════════════════════════════════════════════
-
 const EFFECT_POOL_SIZE = 5;
+const JAKE_FRAMES = 3;
+const jakeTextures = [];
+const imageObjects = [new Image(), new Image(), new Image()];
+const imageDimensions = [{width: 1, height: 1}, {width: 1, height: 1}, {width: 1, height: 1}];
 
-const _jakeImg = new Image();
+for (let i = 0; i < JAKE_FRAMES; i++) {
+  const img = imageObjects[i];
+  img.src = 'image' + (i+1) + '.png';
+  const tex = new THREE.Texture(img);
+  img.onload = () => { 
+    tex.needsUpdate = true; 
+    imageDimensions[i].width = img.naturalWidth || 1;
+    imageDimensions[i].height = img.naturalHeight || 1;
+    updateSpriteScale();
+  };
+  jakeTextures.push(tex);
+}
 
-let frame = 0;
+let jakeFrame = 0;
+let jakeAnimTimer = 0;
+const JAKE_ANIM_INTERVAL = 0.12;
 
-const jakeTexture = new THREE.Texture(_jakeImg);
+function tickJakeAnim(deltaT) {
+  jakeAnimTimer += deltaT;
+  if (jakeAnimTimer < JAKE_ANIM_INTERVAL) return;
+  jakeAnimTimer = 0;
+  jakeFrame = (jakeFrame + 1) % JAKE_FRAMES;
+  const tex = jakeTextures[jakeFrame];
+  jakePlayerSprite.material.map = tex;
+  jakePlayerSprite.material.needsUpdate = true;
+  updateSpriteScale();
+  for (let i = 0; i < EFFECT_POOL_SIZE; i++) {
+    const slot = effectPool[i];
+    if (slot.active) {
+      slot.material.map = tex;
+      slot.material.needsUpdate = true;
+    }
+  }
+}
 
-_jakeImg.onload = () => {
-    jakeTexture.needsUpdate = true;
-};
-
-setInterval(() => {
-    if (frame === 0) _jakeImg.src = 'jake_extracted.png';
-    if (frame === 1) _jakeImg.src = 'asset_road.png';
-    if (frame === 2) _jakeImg.src = 'jake_extracted3.png';
-
-    frame++;
-
-    if (frame > 2) frame = 0;
-}, 100);
 const effectPool = [];
 let effectIndex = 0;
 
 for (let i = 0; i < EFFECT_POOL_SIZE; i++) {
-  const mat  = new THREE.SpriteMaterial({
-    map: jakeTexture,
+  const mat = new THREE.SpriteMaterial({
+    map: jakeTextures[0],
     transparent: true,
     opacity: 0,
     depthWrite: false,
@@ -243,7 +291,6 @@ for (let i = 0; i < EFFECT_POOL_SIZE; i++) {
   sprite.scale.set(0, 0, 1);
   sprite.visible = false;
   scene.add(sprite);
-
   effectPool.push({ sprite, material: mat, active: false, progress: 0, baseY: 0 });
 }
 
@@ -255,11 +302,17 @@ function acquireEffect() {
 }
 
 function returnEffect(slot) {
-  slot.active   = false;
+  slot.active = false;
   slot.progress = 0;
   slot.sprite.visible = false;
   slot.material.opacity = 0;
   slot.sprite.scale.set(0, 0, 1);
+}
+
+function getSpriteScale(height, frameIndex) {
+  const dims = imageDimensions[frameIndex];
+  const aspect = dims.width / Math.max(dims.height, 1);
+  return { x: height * aspect, y: height };
 }
 
 function triggerCubeEffect(cube) {
@@ -270,67 +323,70 @@ function triggerCubeEffect(cube) {
   slot.sprite.position.copy(worldPos);
   slot.sprite.position.y += 0.25;
   slot.baseY = slot.sprite.position.y;
-  slot.sprite.scale.set(0.1, 0.133, 1);
+  const scale = getSpriteScale(0.133, jakeFrame);
+  slot.sprite.scale.set(scale.x, scale.y, 1);
+  slot.material.map = jakeTextures[jakeFrame];
   slot.material.opacity = 1;
   slot.sprite.visible = true;
-  slot.active   = true;
+  slot.active = true;
   slot.progress = 0;
 }
 
 const EFFECT_DURATION = 0.65;
-
 function updateEffects(deltaT) {
   for (let i = 0; i < EFFECT_POOL_SIZE; i++) {
     const slot = effectPool[i];
     if (!slot.active) continue;
-
     slot.progress += deltaT / EFFECT_DURATION;
-
     if (slot.progress >= 1.0) {
       returnEffect(slot);
       continue;
     }
-
     const t = slot.progress;
-
     let s;
-    if (t < 0.4) {
-      s = 2.4 * (t / 0.4);
-    } else {
-      s = 2.4 - 0.5 * ((t - 0.4) / 0.6);
-    }
-    slot.sprite.scale.set(s * 0.75, s, 1);
-
+    if (t < 0.4) s = 2.4 * (t / 0.4);
+    else s = 2.4 - 0.5 * ((t - 0.4) / 0.6);
+    const scale = getSpriteScale(s, jakeFrame);
+    slot.sprite.scale.set(scale.x, scale.y, 1);
     slot.material.rotation = 0;
     slot.sprite.position.y = slot.baseY + t * 1.5;
     slot.material.opacity = t < 0.40 ? 1 : 1 - (t - 0.40) / 0.60;
   }
 }
-// ═══════════════════════════════════════════════════════════════════════════════
 
 const playerGroup = new THREE.Group();
 const playerMesh = new THREE.Mesh(sharedGeos.player, sharedMats.player);
 playerMesh.castShadow = true;
 playerMesh.visible = false;
 playerGroup.add(playerMesh);
-playerGroup.position.set(0, 0.75, 0);
+
+const shieldRing = new THREE.Mesh(sharedGeos.shieldRing, sharedMats.shield);
+shieldRing.rotation.x = Math.PI/2;
+shieldRing.visible = false;
+playerGroup.add(shieldRing);
+playerGroup.position.set(0, PLAYER_HEIGHT/2, 0);
 scene.add(playerGroup);
 
-// Jake player sprite
+let currentSizeMultiplier = 1.5;
+
 const jakePlayerSprite = new THREE.Sprite(
   new THREE.SpriteMaterial({
-    map: jakeTexture,
+    map: jakeTextures[0],
     transparent: true,
     opacity: 1,
     depthWrite: false,
   })
 );
-jakePlayerSprite.scale.set(4.5, 6.0, 1);
-jakePlayerSprite.center.set(0.5, 0.0);
+jakePlayerSprite.scale.set(1, 1, 1);
 jakePlayerSprite.visible = false;
 scene.add(jakePlayerSprite);
 
-// Simplified particles
+function updateSpriteScale() {
+  // Match sprite size to the actual player hitbox dimensions
+  const scale = getSpriteScale(PLAYER_HEIGHT * currentSizeMultiplier, jakeFrame);
+  jakePlayerSprite.scale.set(scale.x, scale.y, 1);
+}
+
 const particleGroup = new THREE.Group();
 scene.add(particleGroup);
 const MAX_PARTICLES = 150;
@@ -461,6 +517,17 @@ function createTable(lane,z){
   scene.add(group); return group;
 }
 
+function createCubeBarrier(lane,z){
+  const group=new THREE.Group();
+  const positions=[[0,0.35,0],[0.4,0.35,0.3],[-0.4,0.35,-0.3],[0,1.05,0],[0.3,1.05,0.2],[-0.3,1.05,-0.2]];
+  positions.forEach(([px,py,pz])=>{
+    const c=new THREE.Mesh(sharedGeos.cubeBlock, sharedMats.cubeBarrier);
+    c.position.set(px,py,pz); c.castShadow=true; group.add(c);
+  });
+  group.position.set(LANES[lane],0,z);
+  group.userData={type:'cubeBarrier', height:1.3};
+  scene.add(group); return group;
+}
 
 function createCoin(lane,z,height=1.3){
   const group=new THREE.Group();
@@ -503,7 +570,8 @@ function createDiamond(lane,z,height=1.6){
 function createPowerup(lane,z,ptype){
   const group=new THREE.Group();
   let mat, geo;
-  if(ptype==='magnet'){mat=sharedMats.magnet; geo=new THREE.BoxGeometry(0.5,0.7,0.3);}
+  if(ptype==='shield'){mat=sharedMats.shield; geo=new THREE.OctahedronGeometry(0.5);}
+  else if(ptype==='magnet'){mat=sharedMats.magnet; geo=new THREE.BoxGeometry(0.5,0.7,0.3);}
   else{mat=sharedMats.x2; geo=new THREE.BoxGeometry(0.55,0.55,0.55);}
   const mesh=new THREE.Mesh(geo,mat); mesh.castShadow=true; group.add(mesh);
   const ring=new THREE.Mesh(sharedGeos.powerupRing, mat);
@@ -539,6 +607,7 @@ let currentLane=1, targetLane=1;
 let playerY=0, velocityY=0, jumping=false, sliding=false, slideTimer=0;
 let currentSpeed=BASE_SPEED;
 let spawnTimer=0, coinSpawnTimer=0, starSpawnTimer=0, diamondSpawnTimer=0, powerupTimer=0;
+let shieldActive=false, shieldTimer=0;
 let magnetActive=false, magnetTimer=0;
 let x2Active=false, x2Timer=0;
 let distanceTravelled=0, skyPhase=0, cameraShake=0;
@@ -581,13 +650,15 @@ function startGame(){
   playerY=0; velocityY=0; jumping=false; sliding=false; slideTimer=0;
   currentSpeed=BASE_SPEED; speedLevel=1;
   spawnTimer=0.5; coinSpawnTimer=0.2; starSpawnTimer=1; diamondSpawnTimer=1.8; powerupTimer=4;
-  magnetActive=false; x2Active=false;
+  shieldActive=false; magnetActive=false; x2Active=false;
   distanceTravelled=0; skyPhase=0;
 
+  shieldRing.visible=false;
   jakePlayerSprite.visible = true;
+  updateSpriteScale();
   for (let i = 0; i < EFFECT_POOL_SIZE; i++) returnEffect(effectPool[i]);
   effectIndex = 0;
-  playerGroup.position.set(LANES[1],0.75,0);
+  playerGroup.position.set(LANES[1], PLAYER_HEIGHT/2, 0);
   playerGroup.scale.set(1,1,1);
 
   document.getElementById('scoreDisplay').textContent='0';
@@ -653,21 +724,25 @@ function resetCombo(){
 
 function activatePowerup(ptype){
   const el=document.getElementById('powerupDisplay');
-  if(ptype==='magnet'){magnetActive=true;magnetTimer=8;el.style.color='#ff44ff';el.textContent='🧲 MAGNET';flashScreen('#ff44ff',0.2);}
+  if(ptype==='shield'){shieldActive=true;shieldTimer=8;shieldRing.visible=true;el.style.color='#00ccff';el.textContent='🛡 SHIELD';flashScreen('#00ccff',0.25);}
+  else if(ptype==='magnet'){magnetActive=true;magnetTimer=8;el.style.color='#ff44ff';el.textContent='🧲 MAGNET';flashScreen('#ff44ff',0.2);}
   else{x2Active=true;x2Timer=8;el.style.color='#00ff88';el.textContent='×2 SCORE';flashScreen('#00ff88',0.2);}
   el.style.opacity='1';
   setTimeout(()=>{el.style.opacity='0';},2000);
 }
 
+const obstacleCreators = [createBarrier,createTallBarrier,createCar,createBus,createTable,createCubeBarrier];
+
 function spawnObstacle(){
   const z=camera.position.z-42;
   const r=Math.random();
   let creator;
-  if(r<0.25) creator=createBarrier;
-  else if(r<0.45) creator=createTallBarrier;
-  else if(r<0.65) creator=createCar;
-  else if(r<0.82) creator=createBus;
-  else creator=createTable;
+  if(r<0.2) creator=createBarrier;
+  else if(r<0.35) creator=createTallBarrier;
+  else if(r<0.5) creator=createCar;
+  else if(r<0.65) creator=createBus;
+  else if(r<0.8) creator=createTable;
+  else creator=createCubeBarrier;
   const lane=Math.floor(Math.random()*3);
   obstacles.push(creator(lane,z));
   if(Math.random()<0.3+speedLevel*0.02){
@@ -695,8 +770,8 @@ function spawnDiamondItem(){
   diamonds.push(createDiamond(Math.floor(Math.random()*3),camera.position.z-39,1.5+Math.random()*0.4));
 }
 function spawnPowerupItem(){
-  const types=['magnet','x2'];
-  powerups.push(createPowerup(Math.floor(Math.random()*3),camera.position.z-40,types[Math.floor(Math.random()*2)]));
+  const types=['shield','magnet','x2'];
+  powerups.push(createPowerup(Math.floor(Math.random()*3),camera.position.z-40,types[Math.floor(Math.random()*3)]));
 }
 
 function updateLaneDots(){
@@ -722,11 +797,11 @@ function attractCollectible(item){
 
 function update(){
   if(!running) return;
-
+  tickJakeAnim(0.016);
   distanceTravelled += currentSpeed;
   currentSpeed = Math.min(MAX_SPEED, BASE_SPEED + distanceTravelled * SPEED_INCREMENT);
   speedLevel = Math.floor((currentSpeed - BASE_SPEED) / 0.05) + 1;
-
+  
   document.getElementById('speedDisplay').textContent = `SPEED: ${speedLevel}x`;
   document.getElementById('speedBar').style.width = Math.min(100, ((currentSpeed-BASE_SPEED)/(MAX_SPEED-BASE_SPEED))*100)+'%';
 
@@ -757,37 +832,48 @@ function update(){
     slideTimer -= 0.016;
     playerGroup.position.y = 0.25 + playerY;
     playerGroup.scale.y = 0.35;
-    if(slideTimer<=0){sliding=false;playerGroup.scale.y=1;playerGroup.position.y=0.75+playerY;}
+    if(slideTimer<=0){sliding=false;playerGroup.scale.y=1;playerGroup.position.y=PLAYER_HEIGHT/2+playerY;}
   } else {
-    playerGroup.position.y = 0.75 + playerY;
+    playerGroup.position.y = PLAYER_HEIGHT/2 + playerY;
   }
 
-  // Sync Jake sprite to player position
   playerGroup.getWorldPosition(worldPos);
   jakePlayerSprite.position.copy(worldPos);
-  jakePlayerSprite.position.y = playerGroup.position.y - 0.75;
-  jakePlayerSprite.position.z = worldPos.z + 1.5;
-  jakePlayerSprite.scale.set(4.5, sliding ? 2.1 : 6.0, 1);
+  
+  // Match sprite to player size
+  const baseHeight = sliding ? PLAYER_HEIGHT * 0.35 : PLAYER_HEIGHT;
+  const scale = getSpriteScale(baseHeight * currentSizeMultiplier, jakeFrame);
+  jakePlayerSprite.scale.set(scale.x, scale.y, 1);
 
   if(comboTimer>0){comboTimer-=0.016;if(comboTimer<=0)resetCombo();}
+  if(shieldActive){shieldTimer-=0.016;if(shieldTimer<=0){shieldActive=false;shieldRing.visible=false;}}
   if(magnetActive){magnetTimer-=0.016;if(magnetTimer<=0)magnetActive=false;}
   if(x2Active){x2Timer-=0.016;if(x2Timer<=0)x2Active=false;}
 
-  // Obstacles
+  // Adjusted hit detection for larger player
   for(let i=obstacles.length-1;i>=0;i--){
     const o=obstacles[i];
     o.position.z += currentSpeed;
     const dx=Math.abs(o.position.x-playerGroup.position.x);
     const dz=Math.abs(o.position.z-playerGroup.position.z);
-    if(dz<0.9){
+    if(dz<1.2){
       let hit=false;
       const type=o.userData.type, h=o.userData.height||1;
-      const ptop=playerGroup.position.y+(sliding?0.3:0.75);
-      const pbot=playerGroup.position.y-(sliding?0.15:0.75);
-      if(type==='car'||type==='bus'){if(pbot<h+0.1&&dx<1.2)hit=true;}
-      else if(type==='barrier'||type==='table'){if(pbot<h+0.1&&dx<1.1)hit=true;}
-      else if(type==='tall'){if(!sliding&&ptop<h+0.2&&dx<1.1)hit=true;}
+      const ptop=playerGroup.position.y+(sliding?0.5:PLAYER_HEIGHT/2);
+      const pbot=playerGroup.position.y-(sliding?0.2:PLAYER_HEIGHT/2);
+      if(type==='car'||type==='bus'){if(pbot<h+0.1&&dx<1.5)hit=true;}
+      else if(type==='barrier'||type==='table'){if(pbot<h+0.1&&dx<1.3)hit=true;}
+      else if(type==='tall'||type==='cubeBarrier'){if(!sliding&&ptop<h+0.2&&dx<1.3)hit=true;}
       if(hit){
+        if(shieldActive){
+          shieldActive=false;shieldTimer=0;shieldRing.visible=false;
+          spawnParticles(playerGroup.position.x,playerGroup.position.y,playerGroup.position.z,0,0.8,1,15);
+          flashScreen('#00ccff',0.5);
+          o.traverse(child => {
+            if (child.isMesh) triggerCubeEffect(child);
+          });
+          scene.remove(o);obstacles.splice(i,1);continue;
+        }
         spawnParticles(playerGroup.position.x,playerGroup.position.y,playerGroup.position.z,1,0.2,0.2,25);
         endGame();return;
       }
@@ -796,38 +882,34 @@ function update(){
     if(o.position.z>12){scene.remove(o);obstacles.splice(i,1);}
   }
 
-  // Coins
+  // Adjusted collectible hitboxes for larger player
   for(let i=coins.length-1;i>=0;i--){
     const c=coins[i];c.position.z+=currentSpeed;c.rotation.y+=0.04;
     if(magnetActive)attractCollectible(c);
-    if(!c.userData.collected&&Math.abs(c.position.x-playerGroup.position.x)<0.85&&Math.abs(c.position.z-playerGroup.position.z)<0.85){c.userData.collected=true;collectItem(c,'coin');scene.remove(c);coins.splice(i,1);continue;}
+    if(!c.userData.collected&&Math.abs(c.position.x-playerGroup.position.x)<1.2&&Math.abs(c.position.z-playerGroup.position.z)<1.2){c.userData.collected=true;collectItem(c,'coin');scene.remove(c);coins.splice(i,1);continue;}
     if(c.position.z>12){scene.remove(c);coins.splice(i,1);}
   }
 
-  // Stars
   for(let i=stars.length-1;i>=0;i--){
     const s=stars[i];s.position.z+=currentSpeed;s.rotation.y+=0.03;
     if(magnetActive)attractCollectible(s);
-    if(!s.userData.collected&&Math.abs(s.position.x-playerGroup.position.x)<0.85&&Math.abs(s.position.z-playerGroup.position.z)<0.85){s.userData.collected=true;collectItem(s,'star');scene.remove(s);stars.splice(i,1);continue;}
+    if(!s.userData.collected&&Math.abs(s.position.x-playerGroup.position.x)<1.2&&Math.abs(s.position.z-playerGroup.position.z)<1.2){s.userData.collected=true;collectItem(s,'star');scene.remove(s);stars.splice(i,1);continue;}
     if(s.position.z>12){scene.remove(s);stars.splice(i,1);}
   }
 
-  // Diamonds
   for(let i=diamonds.length-1;i>=0;i--){
     const d=diamonds[i];d.position.z+=currentSpeed;d.rotation.y+=0.05;
     if(magnetActive)attractCollectible(d);
-    if(!d.userData.collected&&Math.abs(d.position.x-playerGroup.position.x)<0.85&&Math.abs(d.position.z-playerGroup.position.z)<0.85){d.userData.collected=true;collectItem(d,'diamond');scene.remove(d);diamonds.splice(i,1);continue;}
+    if(!d.userData.collected&&Math.abs(d.position.x-playerGroup.position.x)<1.2&&Math.abs(d.position.z-playerGroup.position.z)<1.2){d.userData.collected=true;collectItem(d,'diamond');scene.remove(d);diamonds.splice(i,1);continue;}
     if(d.position.z>12){scene.remove(d);diamonds.splice(i,1);}
   }
 
-  // Powerups
   for(let i=powerups.length-1;i>=0;i--){
     const p=powerups[i];p.position.z+=currentSpeed;p.rotation.y+=0.05;
-    if(!p.userData.collected&&Math.abs(p.position.x-playerGroup.position.x)<0.9&&Math.abs(p.position.z-playerGroup.position.z)<0.9){p.userData.collected=true;activatePowerup(p.userData.ptype);spawnParticles(p.position.x,p.position.y,p.position.z,0.5,1,0.5,15);scene.remove(p);powerups.splice(i,1);continue;}
+    if(!p.userData.collected&&Math.abs(p.position.x-playerGroup.position.x)<1.2&&Math.abs(p.position.z-playerGroup.position.z)<1.2){p.userData.collected=true;activatePowerup(p.userData.ptype);spawnParticles(p.position.x,p.position.y,p.position.z,0.5,1,0.5,15);scene.remove(p);powerups.splice(i,1);continue;}
     if(p.position.z>12){scene.remove(p);powerups.splice(i,1);}
   }
 
-  // Recycle world
   groundTiles.forEach(t=>{t.position.z+=currentSpeed;if(t.position.z>10)t.position.z-=GROUND_LENGTH+TILE_SIZE;});
   walls.forEach(w=>{w.position.z+=currentSpeed;if(w.position.z>10)w.position.z-=GROUND_LENGTH+TILE_SIZE;});
   buildings.forEach(b=>{b.position.z+=currentSpeed;if(b.position.z>12)b.position.z-=GROUND_LENGTH+8;});
@@ -854,6 +936,7 @@ function jumpAction(){if(!running||gameOver)return;if(!jumping&&playerY===0&&!sl
 function slideAction(){if(!running||gameOver)return;if(jumping){jumping=false;velocityY=0;playerY=0;}sliding=true;slideTimer=0.55;}
 
 window.addEventListener('keydown',e=>{
+  if(e.target&&e.target.closest&&e.target.closest('#frameImport'))return;
   if(!gameStarted||gameOver){if(e.key===' '||e.key==='ArrowUp'||e.key==='w'||e.key==='Enter'){e.preventDefault();startGame();}return;}
   if(e.key==='ArrowLeft'||e.key==='a'){e.preventDefault();moveLeft();}
   else if(e.key==='ArrowRight'||e.key==='d'){e.preventDefault();moveRight();}
@@ -863,11 +946,12 @@ window.addEventListener('keydown',e=>{
 
 let tsX=0,tsY=0;
 window.addEventListener('touchstart',e=>{
-  if(e.target.closest('#restartBtn')||e.target.closest('#mainStartBtn'))return;
+  if(e.target.closest('#restartBtn')||e.target.closest('#mainStartBtn')||e.target.closest('#frameImport'))return;
   tsX=e.touches[0].clientX;tsY=e.touches[0].clientY;
 },{passive:true});
 
 window.addEventListener('touchend',e=>{
+  if(e.target.closest('#frameImport'))return;
   if(!gameStarted||gameOver){startGame();return;}
   if(!running)return;
   const dx=(e.changedTouches[0]?.clientX||0)-tsX;
@@ -881,6 +965,77 @@ window.addEventListener('touchend',e=>{
 
 document.getElementById('mainStartBtn').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();startGame();});
 document.getElementById('restartBtn').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();startGame();});
+
+// ── IMAGE IMPORT & RESIZE LOGIC ─────────────────────────────
+const frameSlotUrls=[null,null,null];
+const frameFileInput=document.getElementById('frameFileInput');
+const singleFrameInput=document.getElementById('singleFrameInput');
+let singleTargetSlot=0;
+
+function updateImportStatus(){
+  const loaded=frameSlotUrls.filter(function(u){return u;}).length;
+  const el=document.getElementById('importStatus');
+  if(loaded>0){el.textContent='✓ '+loaded+'/3 frames loaded';el.style.opacity='1';}
+  else{el.textContent='';el.style.opacity='0';}
+}
+
+function loadFrameIntoSlot(index,file){
+  if(!file||!file.type.startsWith('image/'))return;
+  if(frameSlotUrls[index])URL.revokeObjectURL(frameSlotUrls[index]);
+  const url=URL.createObjectURL(file);
+  frameSlotUrls[index]=url;
+  const img = new Image();
+  img.onload=function(){
+    imageDimensions[index].width = img.naturalWidth;
+    imageDimensions[index].height = img.naturalHeight;
+    jakeTextures[index].image = img;
+    jakeTextures[index].needsUpdate = true;
+    updateSpriteScale();
+    const slotEl = document.getElementById('frameSlot'+index);
+    if(slotEl){slotEl.style.backgroundImage='url('+url+')';slotEl.classList.add('loaded');}
+    updateImportStatus();
+  };
+  img.src=url;
+}
+
+function refreshPlayerFrame(){
+  jakeFrame=0;
+  jakePlayerSprite.material.map=jakeTextures[0];
+  jakePlayerSprite.material.needsUpdate=true;
+  updateSpriteScale();
+}
+
+frameFileInput.addEventListener('change',function(e){
+  const files=Array.from(e.target.files).filter(function(f){return f.type.startsWith('image/');}).slice(0,3);
+  files.forEach(function(f,i){loadFrameIntoSlot(i,f);});
+  if(files.length>0)refreshPlayerFrame();
+  e.target.value='';
+});
+
+singleFrameInput.addEventListener('change',function(e){
+  const f=e.target.files[0];
+  if(f){loadFrameIntoSlot(singleTargetSlot,f);refreshPlayerFrame();}
+  e.target.value='';
+});
+
+document.getElementById('importBtn').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();frameFileInput.click();});
+document.querySelectorAll('.frameSlot').forEach(function(slot){
+  slot.addEventListener('click',function(e){
+    e.preventDefault();e.stopPropagation();
+    singleTargetSlot=parseInt(slot.dataset.slot,10);
+    singleFrameInput.click();
+  });
+});
+
+// ── SIZE SLIDER ──────────────────────────────────────────────
+const sizeSlider = document.getElementById('sizeSlider');
+const sizeValue = document.getElementById('sizeValue');
+
+sizeSlider.addEventListener('input', function(e) {
+  currentSizeMultiplier = parseFloat(e.target.value);
+  sizeValue.textContent = currentSizeMultiplier.toFixed(1) + 'x';
+  updateSpriteScale();
+});
 
 function animate(){
   requestAnimationFrame(animate);
