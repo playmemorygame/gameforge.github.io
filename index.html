@@ -210,8 +210,15 @@ const sharedMats = {
 
 const EFFECT_POOL_SIZE = 5;
 
-const _jakeImg = new Image(); 
+const _jakeImg = new Image();
+
 let frame = 0;
+
+const jakeTexture = new THREE.Texture(_jakeImg);
+
+_jakeImg.onload = () => {
+    jakeTexture.needsUpdate = true;
+};
 
 setInterval(() => {
     if (frame === 0) _jakeImg.src = 'jake_extracted.png';
@@ -221,7 +228,7 @@ setInterval(() => {
     frame++;
 
     if (frame > 2) frame = 0;
-}, 100); // speed of animation const jakeTexture = new THREE.Texture(_jakeImg); _jakeImg.onload = () => { jakeTexture.needsUpdate = true; };
+}, 100);
 const effectPool = [];
 let effectIndex = 0;
 
