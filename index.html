@@ -518,16 +518,45 @@
                 flex: 1 1 100%;
             }
         }
+
+        @keyframes lockShake {
+            10%, 90% { transform: translateX(-1px); }
+            20%, 80% { transform: translateX(2px); }
+            30%, 50%, 70% { transform: translateX(-4px); }
+            40%, 60% { transform: translateX(4px); }
+        }
+        .lock-shake {
+            animation: lockShake 0.4s;
+        }
     </style>
 </head>
 <body>
 
     <div class="toast" id="toast">Data Copied!</div>
 
-    <div class="container">
-        <header>
-            <h1>⚖️ Legal Paced Bulk Number Broadcaster</h1>
-            <p>Runs 100% offline. Uses randomized delays to mimic human behavior and protect your sender score.</p>
+    <div id="lock-overlay" style="position:fixed; inset:0; background:var(--bg-main); z-index:1000; display:flex; align-items:center; justify-content:center; padding:1rem;">
+        <div id="lock-card" style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:2rem; max-width:360px; width:100%; display:flex; flex-direction:column; gap:1rem; text-align:center;">
+            <div style="font-size:2.5rem;">🔒</div>
+            <h2 id="lock-title" style="color:var(--primary); font-size:1.2rem;">Enter Password</h2>
+            <p id="lock-subtitle" style="color:var(--text-muted); font-size:0.85rem; line-height:1.4;"></p>
+            <input type="password" id="lock-password-input" placeholder="Password" autocomplete="off" style="background:var(--bg-input); border:1px solid var(--border); color:var(--text-main); padding:0.7rem; border-radius:8px; font-size:16px; text-align:center; outline:none;">
+            <input type="password" id="lock-password-confirm" placeholder="Confirm Password" autocomplete="off" style="display:none; background:var(--bg-input); border:1px solid var(--border); color:var(--text-main); padding:0.7rem; border-radius:8px; font-size:16px; text-align:center; outline:none;">
+            <div id="lock-error" style="color:#ea0038; font-size:0.8rem; display:none;"></div>
+            <button class="btn btn-accent" id="lock-submit-btn" style="width:100%;">Unlock</button>
+            <p style="color:var(--text-muted); font-size:0.7rem; line-height:1.4;">This only protects local access on this device. If you forget it, you'll need to clear this page's site data in your browser to reset it (your saved numbers will be lost).</p>
+        </div>
+    </div>
+
+    <div class="container" id="app-container" style="display:none;">
+        <header style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
+            <div>
+                <h1>⚖️ Legal Paced Bulk Number Broadcaster</h1>
+                <p>Runs 100% offline. Uses randomized delays to mimic human behavior and protect your sender score.</p>
+            </div>
+            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                <button class="btn btn-outline" id="change-password-btn" style="padding:0.4rem 0.7rem; font-size:0.8rem;" title="Change password">🔑 Change Password</button>
+                <button class="btn btn-outline" id="lock-now-btn" style="padding:0.4rem 0.7rem; font-size:0.8rem;" title="Lock now">🔒 Lock</button>
+            </div>
         </header>
 
         <div class="panel">
@@ -654,12 +683,14 @@
         const importFileInput = document.getElementById('import-file-input');
         const importStatus = document.getElementById('import-status');
 
-        window.addEventListener('DOMContentLoaded', () => {
+        // App startup is now gated behind the password lock screen - this only runs once
+        // the correct password has been entered (see PASSWORD LOCK ENGINE below).
+        function initializeAppAfterUnlock() {
             renderStoredDatabase();
             if(localStorage.getItem('num_temp_msg')) {
                 globalMsgInput.value = localStorage.getItem('num_temp_msg');
             }
-        });
+        }
 
         globalMsgInput.addEventListener('input', (e) => {
             localStorage.setItem('num_temp_msg', e.target.value);
@@ -1548,6 +1579,180 @@
                 toast.textContent = 'Data Copied!';
             }, 2500);
         }
+
+        // ============================================================
+        // PASSWORD LOCK ENGINE
+        // Everything (the whole app container) stays hidden behind this overlay until the
+        // right password is entered. First run: choose a password. After that: it's required
+        // every time this file is opened, in a fresh browser tab, or after a manual Lock -
+        // but NOT on every click within the same tab session, so it doesn't get in your way
+        // while you're actively working (sessionStorage remembers "unlocked" per tab session).
+        // Only a salted SHA-256 hash of the password is ever stored - never the password itself.
+        // ============================================================
+
+        const lockOverlay = document.getElementById('lock-overlay');
+        const lockTitle = document.getElementById('lock-title');
+        const lockSubtitle = document.getElementById('lock-subtitle');
+        const lockPasswordInput = document.getElementById('lock-password-input');
+        const lockPasswordConfirm = document.getElementById('lock-password-confirm');
+        const lockError = document.getElementById('lock-error');
+        const lockSubmitBtn = document.getElementById('lock-submit-btn');
+        const lockCard = document.getElementById('lock-card');
+        const appContainer = document.getElementById('app-container');
+        const changePasswordBtn = document.getElementById('change-password-btn');
+        const lockNowBtn = document.getElementById('lock-now-btn');
+
+        const PW_SALT_KEY = 'scanner_pw_salt';
+        const PW_HASH_KEY = 'scanner_pw_hash';
+        const SESSION_UNLOCK_KEY = 'scanner_unlocked';
+
+        let lockMode = 'login'; // 'setup' | 'login'
+
+        async function sha256Hex(str) {
+            if (window.crypto && window.crypto.subtle) {
+                try {
+                    const enc = new TextEncoder().encode(str);
+                    const buf = await window.crypto.subtle.digest('SHA-256', enc);
+                    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+                } catch (e) {
+                    // fall through to the fallback below if SubtleCrypto rejects (e.g. non-secure context)
+                }
+            }
+            // Fallback deterministic hash for environments without SubtleCrypto available.
+            // Not cryptographically strong, but this is a local deterrent for a personal tool,
+            // not a server-side auth system - it still means the raw password isn't stored.
+            let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+            for (let i = 0; i < str.length; i++) {
+                const ch = str.charCodeAt(i);
+                h1 = Math.imul(h1 ^ ch, 2654435761);
+                h2 = Math.imul(h2 ^ ch, 1597334677);
+            }
+            h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+            h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+            return (h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0');
+        }
+
+        function generateSalt() {
+            const bytes = new Uint8Array(16);
+            if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(bytes);
+            else for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+            return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function showLockError(msg) {
+            lockError.textContent = msg;
+            lockError.style.display = 'block';
+            lockCard.classList.remove('lock-shake');
+            void lockCard.offsetWidth; // restart animation
+            lockCard.classList.add('lock-shake');
+        }
+
+        function unlockApp() {
+            lockOverlay.style.display = 'none';
+            appContainer.style.display = 'flex';
+            sessionStorage.setItem(SESSION_UNLOCK_KEY, 'true');
+            initializeAppAfterUnlock();
+        }
+
+        function initLockScreen() {
+            const hasPassword = !!localStorage.getItem(PW_HASH_KEY);
+
+            if (hasPassword && sessionStorage.getItem(SESSION_UNLOCK_KEY) === 'true') {
+                lockOverlay.style.display = 'none';
+                appContainer.style.display = 'flex';
+                initializeAppAfterUnlock();
+                return;
+            }
+
+            if (hasPassword) {
+                lockMode = 'login';
+                lockTitle.textContent = 'Enter Password';
+                lockSubtitle.textContent = 'This tool is locked. Enter your password to continue.';
+                lockPasswordConfirm.style.display = 'none';
+                lockSubmitBtn.textContent = 'Unlock';
+            } else {
+                lockMode = 'setup';
+                lockTitle.textContent = 'Set a Password';
+                lockSubtitle.textContent = 'First time setup - choose a password to protect this tool. You\'ll need it every time you open this file.';
+                lockPasswordConfirm.style.display = 'block';
+                lockSubmitBtn.textContent = 'Set Password & Unlock';
+            }
+
+            lockPasswordInput.value = '';
+            lockPasswordConfirm.value = '';
+            lockError.style.display = 'none';
+            lockOverlay.style.display = 'flex';
+            appContainer.style.display = 'none';
+            setTimeout(() => lockPasswordInput.focus(), 50);
+        }
+
+        async function handleLockSubmit() {
+            lockError.style.display = 'none';
+            const pw = lockPasswordInput.value;
+
+            if (lockMode === 'setup') {
+                const confirmPw = lockPasswordConfirm.value;
+                if (pw.length < 4) { showLockError('Password must be at least 4 characters.'); return; }
+                if (pw !== confirmPw) { showLockError('Passwords do not match.'); return; }
+
+                const salt = generateSalt();
+                const hash = await sha256Hex(salt + pw);
+                localStorage.setItem(PW_SALT_KEY, salt);
+                localStorage.setItem(PW_HASH_KEY, hash);
+                unlockApp();
+            } else {
+                const salt = localStorage.getItem(PW_SALT_KEY) || '';
+                const hash = await sha256Hex(salt + pw);
+                if (hash === localStorage.getItem(PW_HASH_KEY)) {
+                    unlockApp();
+                } else {
+                    showLockError('Incorrect password. Try again.');
+                    lockPasswordInput.value = '';
+                    lockPasswordInput.focus();
+                }
+            }
+        }
+
+        lockSubmitBtn.addEventListener('click', handleLockSubmit);
+        [lockPasswordInput, lockPasswordConfirm].forEach(inp => {
+            inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleLockSubmit(); });
+        });
+
+        lockNowBtn.addEventListener('click', () => {
+            terminateCampaignAutomation();
+            sessionStorage.removeItem(SESSION_UNLOCK_KEY);
+            initLockScreen();
+        });
+
+        changePasswordBtn.addEventListener('click', async () => {
+            const hasPassword = !!localStorage.getItem(PW_HASH_KEY);
+
+            if (hasPassword) {
+                const current = prompt('Enter your current password:');
+                if (current === null) return;
+                const salt = localStorage.getItem(PW_SALT_KEY) || '';
+                const hash = await sha256Hex(salt + current);
+                if (hash !== localStorage.getItem(PW_HASH_KEY)) {
+                    alert('Incorrect current password. Password not changed.');
+                    return;
+                }
+            }
+
+            const newPw = prompt('Enter a new password (minimum 4 characters):');
+            if (newPw === null) return;
+            if (newPw.length < 4) { alert('Password must be at least 4 characters. Password not changed.'); return; }
+
+            const confirmPw = prompt('Confirm new password:');
+            if (newPw !== confirmPw) { alert('Passwords did not match. Password not changed.'); return; }
+
+            const newSalt = generateSalt();
+            const newHash = await sha256Hex(newSalt + newPw);
+            localStorage.setItem(PW_SALT_KEY, newSalt);
+            localStorage.setItem(PW_HASH_KEY, newHash);
+            alert('Password updated successfully.');
+        });
+
+        initLockScreen();
     </script>
 </body>
 </html>
