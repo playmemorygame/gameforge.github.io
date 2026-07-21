@@ -1057,7 +1057,27 @@
             let dbList = JSON.parse(localStorage.getItem('num_workflow_db')) || [];
             if(dbList[idx]) dbList[idx].sent = isChecked;
             localStorage.setItem('num_workflow_db', JSON.stringify(dbList));
-            renderStoredDatabase();
+
+            // Partial DOM update only - marking one number as sent used to call
+            // renderStoredDatabase(), which wipes and rebuilds the ENTIRE table and jumps
+            // the list back to the top. When you're clicking through numbers one by one that
+            // felt like the page "reloading" after every single message. Now we just patch
+            // the one row that changed, so your scroll position and place in the list stays put.
+            const row = document.getElementById(`row-item-${idx}`);
+            if (row) {
+                row.className = isChecked ? 'msg-sent' : '';
+                const checkbox = row.querySelector('.sent-checkbox');
+                if (checkbox) checkbox.checked = isChecked;
+                const link = document.getElementById(`num-link-${idx}`);
+                if (link) link.classList.toggle('link-visited', isChecked);
+            }
+
+            const sentTotal = dbList.filter(item => item.sent).length;
+            const sentCountEl = document.getElementById('sent-count');
+            if (sentCountEl) sentCountEl.textContent = `Sent: ${sentTotal}/${dbList.length}`;
+
+            const hasUnsent = dbList.some(item => !item.sent);
+            startCampaignBtn.disabled = !hasUnsent;
         }
 
         function updateAllWALinks() {
