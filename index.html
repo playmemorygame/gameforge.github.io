@@ -265,6 +265,15 @@
             color: white;
         }
 
+        .btn-outline {
+            background-color: transparent;
+            color: var(--accent);
+            border: 1px solid var(--accent);
+        }
+        .btn-outline:hover:not(:disabled) {
+            background-color: rgba(83, 189, 235, 0.1);
+        }
+
         .results-wrapper {
             height: 520px;
             overflow-y: auto;
@@ -581,6 +590,13 @@
                     <button class="btn btn-accent" id="export-btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;" disabled>⬇️ Export</button>
                 </div>
 
+                <div class="export-toolbar" style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap; background-color: rgba(0,168,132,0.06); border: 1px dashed var(--primary); border-radius: 8px; padding: 0.75rem;">
+                    <label style="font-size:0.85rem; color: var(--text-muted); white-space:nowrap;">📥 Import saved numbers:</label>
+                    <input type="file" id="import-file-input" accept=".csv,.txt,.xlsx,.xls,.json" style="display:none;">
+                    <button class="btn btn-outline" id="import-btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;">📂 Choose File (.csv / .txt / .xlsx)</button>
+                    <span id="import-status" style="font-size: 0.8rem; color: var(--text-muted);"></span>
+                </div>
+
                 <div class="results-wrapper">
                     <table>
                         <thead>
@@ -608,6 +624,7 @@
         let activeImageIndex = null;
         let campaignTimerId = null;
         const colorPalette = ['#00a884', '#53bdeb', '#ffb703', '#e63946', '#a2d2ff'];
+        const IMPORT_COLOR = '#8696a0';
 
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
@@ -632,6 +649,10 @@
         const automationStatus = document.getElementById('automation-status');
         const paceDelayInput = document.getElementById('pace-delay');
         const dbCountEl = document.getElementById('db-count');
+
+        const importBtn = document.getElementById('import-btn');
+        const importFileInput = document.getElementById('import-file-input');
+        const importStatus = document.getElementById('import-status');
 
         window.addEventListener('DOMContentLoaded', () => {
             renderStoredDatabase();
@@ -920,7 +941,7 @@
             document.getElementById('sent-count').textContent = `Sent: ${sentTotal}/${storedList.length}`;
 
             if (storedList.length === 0) {
-                resultsBody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:2rem 0;">No phone records active. Select and process screenshots.</td></tr>`;
+                resultsBody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:2rem 0;">No phone records active. Select and process screenshots, or import a saved file.</td></tr>`;
                 copyBtn.disabled = true;
                 exportBtn.disabled = true;
                 startCampaignBtn.disabled = true;
@@ -1241,6 +1262,231 @@
                 renderStoredDatabase();
             }
         });
+
+        // ============================================================
+        // IMPORT ENGINE - bring previously-saved numbers back into the ledger
+        // Supports the same formats the tool exports: .csv, .txt, .xlsx/.xls,
+        // plus .json as a bonus for hand-edited lists.
+        // ============================================================
+
+        importBtn.addEventListener('click', () => importFileInput.click());
+
+        importFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            importStatus.textContent = 'Reading file...';
+            importStatus.style.color = 'var(--text-muted)';
+
+            try {
+                const ext = file.name.split('.').pop().toLowerCase();
+                let importedPhones = [];
+
+                if (ext === 'xlsx' || ext === 'xls') {
+                    importedPhones = await parsePhonesFromXLSX(file);
+                } else if (ext === 'json') {
+                    importedPhones = await parsePhonesFromJSON(file);
+                } else if (ext === 'csv') {
+                    importedPhones = await parsePhonesFromCSV(file);
+                } else {
+                    // .txt and anything else unrecognized - treat as plain text list
+                    importedPhones = await parsePhonesFromTXT(file);
+                }
+
+                mergeImportedPhones(importedPhones);
+            } catch (err) {
+                console.error(err);
+                importStatus.textContent = 'Import failed - check console for details.';
+                importStatus.style.color = '#ea0038';
+            } finally {
+                // Reset so selecting the same file again still fires 'change'
+                importFileInput.value = '';
+            }
+        });
+
+        // Pulls the longest valid digit run out of an arbitrary string (a CSV cell,
+        // a line of text, a "https://wa.me/2547..." link, etc.) and normalizes it
+        // the same way the OCR scanner does.
+        function extractPhoneFromString(raw) {
+            if (raw === null || raw === undefined) return null;
+            const str = String(raw);
+
+            // Prefer a wa.me / whatsapp link's number if present
+            const waMatch = str.match(/wa\.me\/(\d{8,16})/i);
+            if (waMatch) return waMatch[1];
+
+            // Otherwise scan for digit runs (allowing a leading +) and take the
+            // longest one that looks like a plausible phone number.
+            const candidates = str.match(/\+?\d[\d\s\-().]{6,18}\d/g) || [];
+            let best = null;
+            candidates.forEach(c => {
+                const digits = c.replace(/[^0-9]/g, '');
+                if (digits.length >= 8 && digits.length <= 16) {
+                    if (!best || digits.length > best.length) best = digits;
+                }
+            });
+            return best;
+        }
+
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsText(file);
+            });
+        }
+
+        function readFileAsArrayBuffer(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        // Minimal CSV line splitter that respects quoted fields (handles the
+        // format this same tool's CSV export produces, and most others).
+        function splitCsvLine(line) {
+            const fields = [];
+            let cur = '';
+            let inQuotes = false;
+            for (let i = 0; i < line.length; i++) {
+                const ch = line[i];
+                if (inQuotes) {
+                    if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+                    else if (ch === '"') { inQuotes = false; }
+                    else { cur += ch; }
+                } else {
+                    if (ch === '"') inQuotes = true;
+                    else if (ch === ',') { fields.push(cur); cur = ''; }
+                    else cur += ch;
+                }
+            }
+            fields.push(cur);
+            return fields;
+        }
+
+        async function parsePhonesFromCSV(file) {
+            const text = await readFileAsText(file);
+            const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+            if (lines.length === 0) return [];
+
+            const headerFields = splitCsvLine(lines[0]).map(h => h.trim().toLowerCase());
+            const phoneColIdx = headerFields.findIndex(h => h.includes('phone') || h.includes('number') || h === 'wa' || h.includes('whatsapp'));
+
+            const phones = [];
+            const startRow = phoneColIdx !== -1 ? 1 : 0; // skip header row only if we found a phone column
+
+            for (let i = startRow; i < lines.length; i++) {
+                const fields = splitCsvLine(lines[i]);
+                const cellValue = phoneColIdx !== -1 ? fields[phoneColIdx] : fields.join(' ');
+                const phone = extractPhoneFromString(cellValue);
+                if (phone) phones.push(phone);
+            }
+            return phones;
+        }
+
+        async function parsePhonesFromTXT(file) {
+            const text = await readFileAsText(file);
+            const lines = text.split(/\r?\n/);
+            const phones = [];
+            lines.forEach(line => {
+                if (!line.trim()) return;
+                const phone = extractPhoneFromString(line);
+                if (phone) phones.push(phone);
+            });
+            return phones;
+        }
+
+        async function parsePhonesFromJSON(file) {
+            const text = await readFileAsText(file);
+            const data = JSON.parse(text);
+            const list = Array.isArray(data) ? data : (Array.isArray(data.records) ? data.records : []);
+            const phones = [];
+            list.forEach(entry => {
+                let raw = entry;
+                if (entry && typeof entry === 'object') {
+                    raw = entry.phone || entry['Phone Number'] || entry.number || entry.Number || JSON.stringify(entry);
+                }
+                const phone = extractPhoneFromString(raw);
+                if (phone) phones.push(phone);
+            });
+            return phones;
+        }
+
+        async function parsePhonesFromXLSX(file) {
+            if (typeof XLSX === 'undefined') {
+                throw new Error('Excel import library did not load (check your internet connection) - try CSV or TXT instead.');
+            }
+            const buffer = await readFileAsArrayBuffer(file);
+            const workbook = XLSX.read(buffer, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+            const phones = [];
+            if (rows.length > 0) {
+                const keys = Object.keys(rows[0]);
+                const phoneKey = keys.find(k => /phone|number|whatsapp|wa\b/i.test(k));
+                rows.forEach(row => {
+                    const cellValue = phoneKey ? row[phoneKey] : Object.values(row).join(' ');
+                    const phone = extractPhoneFromString(cellValue);
+                    if (phone) phones.push(phone);
+                });
+            } else {
+                // Sheet had no header row detected - fall back to raw array-of-arrays
+                const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                rawRows.forEach(r => {
+                    const phone = extractPhoneFromString(r.join(' '));
+                    if (phone) phones.push(phone);
+                });
+            }
+            return phones;
+        }
+
+        function mergeImportedPhones(importedPhones) {
+            if (!importedPhones || importedPhones.length === 0) {
+                importStatus.textContent = 'No valid phone numbers found in that file.';
+                importStatus.style.color = '#ea0038';
+                return;
+            }
+
+            const existingDb = JSON.parse(localStorage.getItem('num_workflow_db')) || [];
+            const seenPhones = new Set(existingDb.map(r => r.phone));
+            const timestamp = new Date().toISOString();
+            let addedCount = 0;
+            let duplicateCount = 0;
+
+            importedPhones.forEach(phone => {
+                if (seenPhones.has(phone)) {
+                    duplicateCount++;
+                    return;
+                }
+                seenPhones.add(phone);
+                addedCount++;
+                existingDb.push({
+                    phone: phone,
+                    sourceLabel: 'Imported',
+                    sourceColor: IMPORT_COLOR,
+                    sent: false,
+                    scannedAt: timestamp
+                });
+            });
+
+            localStorage.setItem('num_workflow_db', JSON.stringify(existingDb));
+            renderStoredDatabase();
+
+            importStatus.style.color = 'var(--primary)';
+            importStatus.textContent = `Imported ${addedCount} number(s)${duplicateCount ? `, skipped ${duplicateCount} duplicate(s)` : ''}.`;
+
+            toast.textContent = `Imported ${addedCount} number(s)!`;
+            toast.style.display = 'block';
+            setTimeout(() => {
+                toast.style.display = 'none';
+                toast.textContent = 'Data Copied!';
+            }, 2500);
+        }
     </script>
 </body>
 </html>
