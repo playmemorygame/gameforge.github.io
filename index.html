@@ -775,6 +775,15 @@
 
                 container.appendChild(thumb);
                 container.appendChild(badge);
+
+                if (item.scanFailed) {
+                    const warn = document.createElement('div');
+                    warn.textContent = '⚠️';
+                    warn.title = 'This image could not be scanned - click to select, then re-run Scan';
+                    warn.style.cssText = 'position:absolute; top:-6px; left:-6px; font-size:14px; line-height:1; filter: drop-shadow(0 0 2px #000);';
+                    container.appendChild(warn);
+                }
+
                 queueContainer.appendChild(container);
             });
         }
@@ -813,63 +822,75 @@
             }
         }
 
-        // BATCH PROCESSING ENGINE - parallel worker pool version
-        // Fixes for 100+ image batches:
-        //  1. Multiple Tesseract workers process images concurrently instead of one at a time.
-        //  2. Every image is downscaled before OCR (huge speed win on large screenshots).
-        //  3. Only ONE localStorage write happens at the end, instead of one write per image
-        //     (each write re-serializes the entire growing list, which gets slower and slower
-        //     the more numbers you've already found - this was the main source of "reliability"
-        //     slowdowns/freezes on big batches).
-        //  4. The visible canvas is no longer force-jumped to every image mid-scan (that redraw
-        //     work was pure overhead under concurrency) - progress is reported as text instead,
-        //     and boxes are drawn back in on demand when you click a thumbnail.
+        // BATCH PROCESSING ENGINE - single-worker, strictly sequential version
+        // The old parallel worker-pool design was fast but fragile: several concurrent
+        // Tesseract workers sharing memory/CPU on the same page tab is exactly the kind of
+        // setup that throws "Aborted()", WASM out-of-memory, or worker-communication errors
+        // partway through a batch - and once one lane died the whole Promise.all rejected and
+        // silently killed the scan. This version trades a bit of raw speed for reliability:
+        //  1. Exactly ONE persistent Tesseract worker, reused for the whole batch.
+        //  2. Images are processed one at a time, in order - no shared-memory contention.
+        //  3. Every image is wrapped in its own try/catch. If one screenshot fails to OCR
+        //     (corrupt file, weird format, worker hiccup), that image is skipped and flagged,
+        //     and the rest of the batch keeps going instead of the whole run dying.
+        //  4. If the worker itself becomes unusable mid-batch, it's recreated automatically
+        //     and the batch resumes from where it left off.
+        //  5. Progress and localStorage are updated incrementally (one write per image) so
+        //     that even if the tab is closed or crashes mid-batch, everything found so far is
+        //     already saved - nothing is held back for a single "commit at the end".
         scanBtn.addEventListener('click', async () => {
             if (loadedBatchQueue.length === 0) return;
             scanBtn.disabled = true;
             progressDiv.style.display = 'block';
 
             const total = loadedBatchQueue.length;
-            const concurrency = Math.max(1, Math.min(4, navigator.hardwareConcurrency ? navigator.hardwareConcurrency - 1 : 2, total));
             let completed = 0;
+            let failedCount = 0;
             const startTime = performance.now();
 
-            progressDiv.innerHTML = `Starting ${concurrency} parallel OCR workers for ${total} image(s)... <span id="pct">0%</span>`;
+            progressDiv.innerHTML = `Preparing OCR engine for ${total} image(s)... <span id="pct">0%</span>`;
 
-            // Existing DB + phones already queued in this batch, so duplicates across images
-            // (and against previously-scanned numbers) are skipped without touching localStorage
-            // until the very end.
             const existingDb = JSON.parse(localStorage.getItem('num_workflow_db')) || [];
             const seenPhones = new Set(existingDb.map(r => r.phone));
-            const newRecords = [];
-            const batchTimestamp = new Date().toISOString();
+            let workingDb = existingDb;
+            let newFoundCount = 0;
 
-            let workers = [];
+            let worker = null;
+
+            const createWorker = async () => {
+                const w = await Tesseract.createWorker();
+                await w.loadLanguage('eng');
+                await w.initialize('eng');
+                return w;
+            };
+
             try {
-                // 1. Spin up a small pool of workers once, reused across the whole batch.
-                workers = await Promise.all(
-                    Array.from({ length: concurrency }, async () => {
-                        const w = await Tesseract.createWorker();
-                        await w.loadLanguage('eng');
-                        await w.initialize('eng');
-                        return w;
-                    })
-                );
+                worker = await createWorker();
+            } catch (err) {
+                console.error(err);
+                alert('Could not start the OCR engine. Check your connection and try again.');
+                progressDiv.style.display = 'none';
+                scanBtn.disabled = false;
+                return;
+            }
 
-                // 2. Simple work-stealing queue: each worker keeps pulling the next index
-                //    until none are left, so faster workers naturally pick up more images.
-                let nextIndex = 0;
-                const pullNext = () => (nextIndex < total ? nextIndex++ : -1);
+            for (let idx = 0; idx < total; idx++) {
+                const item = loadedBatchQueue[idx];
+                const pct = Math.round((idx / total) * 100);
+                progressDiv.innerHTML = `Scanning image ${idx + 1}/${total} (${item.label})... <span id="pct">${pct}%</span>`;
 
-                const runWorkerLane = async (worker) => {
-                    let idx;
-                    while ((idx = pullNext()) !== -1) {
-                        const item = loadedBatchQueue[idx];
+                let attempt = 0;
+                let succeeded = false;
+
+                while (attempt < 2 && !succeeded) {
+                    attempt++;
+                    try {
                         const { canvas: ocrCanvas, scale } = buildOcrCanvas(item.imageObj);
-
                         const { data } = await worker.recognize(ocrCanvas);
 
                         const boxesForThisImage = [];
+                        const scanTimestamp = new Date().toISOString();
+
                         data.lines.forEach((line) => {
                             let cleanDigits = line.text.replace(/[^0-9+]/g, '').trim();
                             if (cleanDigits.length < 8 || cleanDigits.length > 16) return;
@@ -881,12 +902,13 @@
 
                             if (!seenPhones.has(cleanUrlNumber)) {
                                 seenPhones.add(cleanUrlNumber);
-                                newRecords.push({
+                                newFoundCount++;
+                                workingDb.push({
                                     phone: cleanUrlNumber,
                                     sourceLabel: item.label,
                                     sourceColor: item.color,
                                     sent: false,
-                                    scannedAt: batchTimestamp
+                                    scannedAt: scanTimestamp
                                 });
                             }
                             boxesForThisImage.push(line.bbox);
@@ -894,42 +916,61 @@
 
                         item.recognizedLines = boxesForThisImage;
                         item.ocrScale = scale;
+                        item.scanFailed = false;
+                        succeeded = true;
 
-                        completed++;
-                        const pct = Math.round((completed / total) * 100);
-                        const elapsedSec = (performance.now() - startTime) / 1000;
-                        const rate = completed / Math.max(elapsedSec, 0.001);
-                        progressDiv.innerHTML = `Scanned ${completed}/${total} images (${rate.toFixed(1)}/sec)... <span id="pct">${pct}%</span>`;
+                        // Save after every image, not just at the end, so progress is never lost.
+                        localStorage.setItem('num_workflow_db', JSON.stringify(workingDb));
 
-                        // If the currently-viewed image just finished, refresh its boxes.
                         if (idx === activeImageIndex) drawCanvasBase();
+
+                    } catch (err) {
+                        console.error(`OCR failed on image ${idx + 1} (${item.label}), attempt ${attempt}:`, err);
+
+                        // The worker itself may have died - recreate it once and retry this
+                        // same image before giving up and moving on.
+                        try {
+                            await worker.terminate().catch(() => {});
+                        } catch (e) { /* ignore */ }
+
+                        if (attempt < 2) {
+                            try {
+                                worker = await createWorker();
+                                continue; // retry this image with the fresh worker
+                            } catch (recreateErr) {
+                                console.error('Could not recreate OCR worker:', recreateErr);
+                            }
+                        }
+
+                        // Out of retries - flag this image as failed and move on to the next one.
+                        item.scanFailed = true;
+                        failedCount++;
                     }
-                };
+                }
 
-                // 3. Run all worker lanes concurrently.
-                await Promise.all(workers.map(runWorkerLane));
-
-                // 4. Single batched commit to storage + single re-render of the results table.
-                const finalList = existingDb.concat(newRecords);
-                localStorage.setItem('num_workflow_db', JSON.stringify(finalList));
-                renderStoredDatabase();
-
-                const totalSec = ((performance.now() - startTime) / 1000).toFixed(1);
-                progressDiv.innerHTML = `Done - scanned ${total} image(s) in ${totalSec}s, found ${newRecords.length} new number(s).`;
-
-                setTimeout(() => {
-                    progressDiv.style.display = 'none';
-                    progressDiv.innerHTML = `Initializing Engine... <span id="pct">0%</span>`;
-                }, 4000);
-
-            } catch (err) {
-                console.error(err);
-                alert('OCR Parsing Exception. Check console.');
-                progressDiv.style.display = 'none';
-            } finally {
-                await Promise.all(workers.map(w => w.terminate().catch(() => {})));
-                scanBtn.disabled = false;
+                completed++;
+                const donePct = Math.round((completed / total) * 100);
+                const elapsedSec = (performance.now() - startTime) / 1000;
+                const rate = completed / Math.max(elapsedSec, 0.001);
+                progressDiv.innerHTML = `Scanned ${completed}/${total} images (${rate.toFixed(1)}/sec)${failedCount ? `, ${failedCount} failed` : ''}... <span id="pct">${donePct}%</span>`;
             }
+
+            await worker.terminate().catch(() => {});
+
+            renderStoredDatabase();
+            renderQueueStrip();
+
+            const totalSec = ((performance.now() - startTime) / 1000).toFixed(1);
+            progressDiv.innerHTML = failedCount > 0
+                ? `Done in ${totalSec}s - found ${newFoundCount} new number(s). ${failedCount} image(s) could not be scanned (see queue for ⚠️).`
+                : `Done - scanned ${total} image(s) in ${totalSec}s, found ${newFoundCount} new number(s).`;
+
+            setTimeout(() => {
+                progressDiv.style.display = 'none';
+                progressDiv.innerHTML = `Initializing Engine... <span id="pct">0%</span>`;
+            }, 5000);
+
+            scanBtn.disabled = false;
         });
 
         function renderStoredDatabase() {
